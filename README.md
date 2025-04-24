@@ -62,12 +62,19 @@ The core idea is to train machine learning models to understand the visual cues 
 
 ## Dependencies
 tensorflow==2.19.0
+
 opencv-python==4.11.0.86
+
 numpy==1.26.4
+
 scipy==1.15.2
+
 matplotlib==3.10.1
+
 pyyaml==6.0
+
 torch==2.5.1
+
 torchvision==0.20.1
 
 Libraries for a specific simulation environment 
