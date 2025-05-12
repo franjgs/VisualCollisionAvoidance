@@ -27,10 +27,6 @@ The codebase includes scripts for processing video and Excel-based datasets, tra
 
 ## Repository Structure
 
-<<<<<<< HEAD
-- `Code_develop/`: Python scripts, including `VGG16_CA.py` for dataset processing, model training, and evaluation.
-=======
->>>>>>> 746a0f76b309203e971278737af7f0598d4df0bf
 - `dataframes/`: Excel files with frame annotations (e.g., collision labels).
 - `videos/`: Video files containing raw footage for frame extraction.
 - `image_data/`: Processed frames organized into `train/` and `test/` directories.
@@ -60,36 +56,29 @@ The codebase includes scripts for processing video and Excel-based datasets, tra
 ## Usage
 
 1. **Process Videos and Annotations**:
-<<<<<<< HEAD
-   The `VGG16_CA.py` script processes videos and Excel files, extracts frames, and saves them to `image_data/train/` and `image_data/test/`:
-   ```bash
-   python Code_develop/VGG16_CA.py
-=======
+   
    The `VGG16_Model.py` script processes videos and Excel files, extracts frames, and saves them to `image_data/train/` and `image_data/test/`:
    ```bash
    python VGG16_Model.py
->>>>>>> 746a0f76b309203e971278737af7f0598d4df0bf
    ```
    - Ensure `videos/` and `dataframes/` contain the required files.
    - The script uses frames 70 to 93 by default (adjust `range_min` and `range_max` in the script if needed).
 
-2. **Train the Model**:
+3. **Train the Model**:
    The same script trains and fine-tunes the VGG16 model:
    - Outputs: Trained model (`models/VGG-collision-avoidance-<timestamp>.keras`), weights, and training history (`trainHistoryDict_fine.pkl`).
    - Training includes 20 epochs of initial training and 20 epochs of fine-tuning.
 
-3. **Evaluate Results**:
+4. **Evaluate Results**:
    The script evaluates the model on the test set and generates:
    - Accuracy metrics.
    - Plots of training/validation accuracy and loss (`VGG-collision-avoidance-<timestamp>.pdf`).
    - Confusion matrix and misclassified image visualizations.
 
-4. **Customize Parameters** (Optional):
-<<<<<<< HEAD
-   Edit `Code_develop/VGG16_CA.py` to adjust:
-=======
+5. **Customize Parameters** (Optional):
+
    Edit `VGG16_Model.py` to adjust:
->>>>>>> 746a0f76b309203e971278737af7f0598d4df0bf
+
    - `range_min` and `range_max` for video file range.
    - `target_size` for frame resolution (default: 224x224).
    - `train_ratio` for train/test split (default: 0.8).
