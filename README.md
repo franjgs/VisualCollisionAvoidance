@@ -27,7 +27,10 @@ The codebase includes scripts for processing video and Excel-based datasets, tra
 
 ## Repository Structure
 
+<<<<<<< HEAD
 - `Code_develop/`: Python scripts, including `VGG16_CA.py` for dataset processing, model training, and evaluation.
+=======
+>>>>>>> 746a0f76b309203e971278737af7f0598d4df0bf
 - `dataframes/`: Excel files with frame annotations (e.g., collision labels).
 - `videos/`: Video files containing raw footage for frame extraction.
 - `image_data/`: Processed frames organized into `train/` and `test/` directories.
@@ -57,9 +60,15 @@ The codebase includes scripts for processing video and Excel-based datasets, tra
 ## Usage
 
 1. **Process Videos and Annotations**:
+<<<<<<< HEAD
    The `VGG16_CA.py` script processes videos and Excel files, extracts frames, and saves them to `image_data/train/` and `image_data/test/`:
    ```bash
    python Code_develop/VGG16_CA.py
+=======
+   The `VGG16_Model.py` script processes videos and Excel files, extracts frames, and saves them to `image_data/train/` and `image_data/test/`:
+   ```bash
+   python VGG16_Model.py
+>>>>>>> 746a0f76b309203e971278737af7f0598d4df0bf
    ```
    - Ensure `videos/` and `dataframes/` contain the required files.
    - The script uses frames 70 to 93 by default (adjust `range_min` and `range_max` in the script if needed).
@@ -76,17 +85,57 @@ The codebase includes scripts for processing video and Excel-based datasets, tra
    - Confusion matrix and misclassified image visualizations.
 
 4. **Customize Parameters** (Optional):
+<<<<<<< HEAD
    Edit `Code_develop/VGG16_CA.py` to adjust:
+=======
+   Edit `VGG16_Model.py` to adjust:
+>>>>>>> 746a0f76b309203e971278737af7f0598d4df0bf
    - `range_min` and `range_max` for video file range.
    - `target_size` for frame resolution (default: 224x224).
    - `train_ratio` for train/test split (default: 0.8).
    - `epochs` or learning rates for training.
 
+<<<<<<< HEAD
 ## Requirements
 
 - Python 3.8+
 - Libraries: `tensorflow`, `opencv-python`, `numpy`, `pandas`, `matplotlib`, `scikit-learn`, `pillow`
 - GPU (optional, for faster training; script supports CPU fallback)
+=======
+## Dependencies
+
+tensorflow==2.19.0
+
+opencv-python==4.11.0.86
+
+numpy==1.26.4
+
+scipy==1.15.2
+
+matplotlib==3.10.1
+
+pyyaml==6.0
+
+torch==2.5.1
+
+torchvision==0.20.1
+
+**Libraries for a specific simulation environment:**
+
+airsim==1.9.0
+
+
+**Robotics-related libraries:**
+
+rospy==1.16.0
+
+message-generation==0.11.14
+
+## Datasets
+
+* Information about the datasets used in this project will be provided here, potentially referencing publicly available datasets or custom datasets generated for this research.
+* Consider exploring datasets related to UAV collision avoidance, such as those potentially utilized or referenced in the [uav-collision-avoidance](https://github.com/dario-pedro/uav-collision-avoidance) repository.
+>>>>>>> 746a0f76b309203e971278737af7f0598d4df0bf
 
 ## Contributing
 
