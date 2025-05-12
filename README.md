@@ -56,9 +56,9 @@ The codebase includes scripts for processing video and Excel-based datasets, tra
 ## Usage
 
 1. **Process Videos and Annotations**:
-   The `VGG16_CA.py` script processes videos and Excel files, extracts frames, and saves them to `image_data/train/` and `image_data/test/`:
+   The `VGG16_Model.py` script processes videos and Excel files, extracts frames, and saves them to `image_data/train/` and `image_data/test/`:
    ```bash
-   python Code_develop/VGG16_CA.py
+   python VGG16_Model.py
    ```
    - Ensure `videos/` and `dataframes/` contain the required files.
    - The script uses frames 70 to 93 by default (adjust `range_min` and `range_max` in the script if needed).
@@ -75,7 +75,7 @@ The codebase includes scripts for processing video and Excel-based datasets, tra
    - Confusion matrix and misclassified image visualizations.
 
 4. **Customize Parameters** (Optional):
-   Edit `Code_develop/VGG16_CA.py` to adjust:
+   Edit `VGG16_Model.py` to adjust:
    - `range_min` and `range_max` for video file range.
    - `target_size` for frame resolution (default: 224x224).
    - `train_ratio` for train/test split (default: 0.8).
