@@ -27,7 +27,6 @@ The codebase includes scripts for processing video and Excel-based datasets, tra
 
 ## Repository Structure
 
-- `Code_develop/`: Python scripts, including `VGG16_CA.py` for dataset processing, model training, and evaluation.
 - `dataframes/`: Excel files with frame annotations (e.g., collision labels).
 - `videos/`: Video files containing raw footage for frame extraction.
 - `image_data/`: Processed frames organized into `train/` and `test/` directories.
