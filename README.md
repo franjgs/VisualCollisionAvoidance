@@ -130,12 +130,15 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 If you use this code in your research or projects, please cite:
 
+<<<<<<< HEAD
 **Francisco J. Gonzalez, Universidad Carlos III de Madrid**
 
 Example citation format:
 ```
 Gonzalez-Serrano, Francisco J. (2025). Visual Collision Avoidance for Autonomous Systems. Universidad Carlos III de Madrid.
 ```
+=======
+>>>>>>> c0290dd7f169043f781d9ed5110189e292ce0449
 
 ## Acknowledgments
 
