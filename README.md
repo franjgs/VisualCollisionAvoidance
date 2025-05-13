@@ -1,147 +1,22 @@
 # Visual Collision Avoidance for Autonomous Systems
 
-This repository contains code for developing visual collision avoidance systems for autonomous platforms, such as Unmanned Aerial Vehicles (UAVs) and robots. It uses deep learning, specifically a fine-tuned VGG16 model, to detect potential collisions from camera feeds and enable safe navigation in real-time.
+This repository contains code for a research project on visual collision avoidance for autonomous platforms, such as Unmanned Aerial Vehicles (UAVs) and robots, conducted at Universidad Carlos III de Madrid. It uses deep learning, specifically a fine-tuned VGG16 model, to detect potential collisions from camera feeds and enable safe navigation in real-time.
 
-The project is inspired by and may incorporate elements from the [uav-collision-avoidance](https://github.com/dario-pedro/uav-collision-avoidance) repository by dario-pedro, particularly in dataset structures and evaluation methodologies.
+The project is inspired by the [uav-collision-avoidance](https://github.com/dario-pedro/uav-collision-avoidance) repository by dario-pedro, incorporating similar dataset structures and evaluation methodologies.
 
 ## Project Overview
 
-Autonomous navigation in dynamic environments demands robust collision avoidance to ensure safety. Traditional sensors like LiDAR can be costly and heavy, making camera-based solutions an attractive alternative. This project leverages visual data processed by a VGG16-based convolutional neural network to identify obstacles, assess collision risks, and support avoidance maneuvers.
-
-The codebase includes scripts for processing video and Excel-based datasets, training and fine-tuning the VGG16 model, and evaluating performance through metrics and visualizations like confusion matrices and misclassification plots.
+Autonomous navigation in dynamic environments requires robust collision avoidance to ensure safety. Traditional sensors like LiDAR are costly and heavy, making camera-based solutions an attractive alternative. This project leverages visual data processed by a VGG16-based convolutional neural network to identify obstacles and assess collision risks, supporting safe navigation. The codebase processes video and Excel-based datasets, trains and fine-tunes the VGG16 model, and evaluates performance through metrics and visualizations.
 
 ## Key Features
 
 ### Implemented
-- **Dataset Processing**: Scripts to extract and preprocess frames from video files and corresponding Excel annotations, saving them into train/test directories (`image_data/`).
-- **VGG16 Model Training**: Fine-tuned VGG16 model for binary classification (collision vs. no collision) using TensorFlow and Keras.
-- **Model Evaluation**: Tools to compute accuracy, plot training history, and visualize misclassified images and confusion matrices.
-- **Data Augmentation**: Image preprocessing with augmentation techniques (e.g., shear, zoom) for robust model training.
+- **Dataset Processing**: Extracts and preprocesses frames from video files (`videos/`) and Excel annotations (`dataframes/`), saving them to `image_data/train/` and `image_data/test/`.
+- **VGG16 Model Training**: Fine-tunes VGG16 for binary classification (collision vs. no collision) using TensorFlow and Keras.
+- **Model Evaluation**: Computes accuracy, plots training history, and visualizes confusion matrices and misclassified images.
+- **Data Augmentation**: Applies image preprocessing with augmentation (e.g., shear, zoom) for robust training.
 
 ### Planned
-- **Real-Time Object Detection**: Algorithms for detecting and tracking obstacles in live camera feeds.
-- **Collision Risk Prediction**: Models to estimate obstacle distance, velocity, and collision likelihood.
-- **Path Planning**: Integration of collision avoidance with trajectory planning for autonomous navigation.
-- **Simulation Testing**: Support for environments like Gazebo or AirSim to validate the system.
-- **Hardware Integration**: Guidelines for deploying the model on UAVs or robotic platforms.
-
-## Repository Structure
-
-- `dataframes/`: Excel files with frame annotations (e.g., collision labels).
-- `videos/`: Video files containing raw footage for frame extraction.
-- `image_data/`: Processed frames organized into `train/` and `test/` directories.
-- `models/`: Saved models, weights, and training history files.
-
-## Installation
-
-1. **Clone the Repository**:
-   ```bash
-   git clone https://github.com/franjgs/VisualCollisionAvoidance.git
-   cd VisualCollisionAvoidance
-   ```
-
-2. **Install Dependencies**:
-   Create a virtual environment and install required packages:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install tensorflow opencv-python numpy pandas matplotlib scikit-learn pillow
-   ```
-
-3. **Prepare the Dataset**:
-   - Place video files (e.g., `collision01.mp4`) in `videos/`.
-   - Place corresponding Excel files (e.g., `video-00001.xlsx`) in `dataframes/`.
-   - Ensure file naming follows the pattern: `collisionXX.mp4` and `video-XXXXX.xlsx`, where `XX` and `XXXXX` align (e.g., `collision01.mp4` pairs with `video-00001.xlsx`).
-
-## Usage
-
-1. **Process Videos and Annotations**:
-   
-   The `VGG16_Model.py` script processes videos and Excel files, extracts frames, and saves them to `image_data/train/` and `image_data/test/`:
-   ```bash
-   python VGG16_Model.py
-   ```
-   - Ensure `videos/` and `dataframes/` contain the required files.
-   - The script uses frames 70 to 93 by default (adjust `range_min` and `range_max` in the script if needed).
-
-3. **Train the Model**:
-   The same script trains and fine-tunes the VGG16 model:
-   - Outputs: Trained model (`models/VGG-collision-avoidance-<timestamp>.keras`), weights, and training history (`trainHistoryDict_fine.pkl`).
-   - Training includes 20 epochs of initial training and 20 epochs of fine-tuning.
-
-4. **Evaluate Results**:
-   The script evaluates the model on the test set and generates:
-   - Accuracy metrics.
-   - Plots of training/validation accuracy and loss (`VGG-collision-avoidance-<timestamp>.pdf`).
-   - Confusion matrix and misclassified image visualizations.
-
-5. **Customize Parameters** (Optional):
-
-   Edit `VGG16_Model.py` to adjust:
-
-   - `range_min` and `range_max` for video file range.
-   - `target_size` for frame resolution (default: 224x224).
-   - `train_ratio` for train/test split (default: 0.8).
-   - `epochs` or learning rates for training.
-
-<<<<<<< HEAD
-## Requirements
-
-- Python 3.8+
-- Libraries: `tensorflow`, `opencv-python`, `numpy`, `pandas`, `matplotlib`, `scikit-learn`, `pillow`
-- GPU (optional, for faster training; script supports CPU fallback)
-=======
-## Dependencies
-
-tensorflow==2.19.0
-
-opencv-python==4.11.0.86
-
-numpy==1.26.4
-
-scipy==1.15.2
-
-matplotlib==3.10.1
-
-pyyaml==6.0
-
-torch==2.5.1
-
-torchvision==0.20.1
-
-**Libraries for a specific simulation environment:**
-
-airsim==1.9.0
-
-
-**Robotics-related libraries:**
-
-rospy==1.16.0
-
-message-generation==0.11.14
-
-## Datasets
-
-* Information about the datasets used in this project will be provided here, potentially referencing publicly available datasets or custom datasets generated for this research.
-* Consider exploring datasets related to UAV collision avoidance, such as those potentially utilized or referenced in the [uav-collision-avoidance](https://github.com/dario-pedro/uav-collision-avoidance) repository.
->>>>>>> 746a0f76b309203e971278737af7f0598d4df0bf
-
-## Contributing
-
-Contributions are welcome! To contribute:
-1. Fork the repository.
-2. Create a feature branch (`git checkout -b feature/your-feature`).
-3. Commit changes (`git commit -m "Add your feature"`).
-4. Push to the branch (`git push origin feature/your-feature`).
-5. Open a pull request.
-
-Please ensure code follows PEP 8 guidelines and include tests where applicable.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Inspired by the [uav-collision-avoidance](https://github.com/dario-pedro/uav-collision-avoidance) repository by dario-pedro.
-- Built with open-source libraries: TensorFlow, OpenCV, NumPy, Pandas, and Matplotlib.
+- **Real-Time Object Detection**: Develop algorithms for detecting and tracking obstacles in live camera feeds.
+- **Collision Risk Prediction**: Create models to estimate obstacle distance, velocity, and collision likelihood.
+- **Path Planning**: Integrate collision avoidance with trajectory planning for autonomous navigation.
