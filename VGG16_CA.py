@@ -100,8 +100,17 @@ def example_errors(cls_true, cls_pred):
     cm = confusion_matrix(y_true=cls_true, y_pred=cls_pred)
     plot_confusion_matrix(cm=cm, classes=class_names)
 
-def plot_training_history(history, history_fine=None):
-    """Plots training and validation accuracy and loss, including fine-tuning if provided."""
+def plot_training_history(history, history_fine=None, save_path=None):
+    """Plots training and validation accuracy and loss, including fine-tuning if provided.
+
+    Args:
+        history: Training history object from Keras model.fit().
+        history_fine: Optional fine-tuning history object.
+        save_path: Optional path to save the plot as a PDF (e.g., 'plot.pdf').
+
+    Returns:
+        matplotlib.figure.Figure: The plotted figure object.
+    """
     acc = history.history['accuracy']
     val_acc = history.history['val_accuracy']
     loss = history.history['loss']
@@ -121,7 +130,7 @@ def plot_training_history(history, history_fine=None):
     else:
         total_epochs = epochs_initial
 
-    plt.figure(figsize=(12, 5))
+    fig = plt.figure(figsize=(12, 5))
     plt.subplot(1, 2, 1)
     plt.plot(range(total_epochs), acc, label='Training Accuracy')
     plt.plot(range(total_epochs), val_acc, label='Validation Accuracy')
@@ -137,7 +146,13 @@ def plot_training_history(history, history_fine=None):
         plt.axvline(x=epochs_initial-0.5, linestyle='--', label='Start Fine-Tuning')
     plt.legend()
     plt.title('Loss')
-    plt.show()
+
+    if save_path:
+        fig.savefig(save_path, bbox_inches='tight', format='pdf')
+        print(f"Saved plot to {save_path}")
+
+    return fig
+
 
 def open_video(video):
     """Opens a video file for processing."""
@@ -341,12 +356,14 @@ example_errors(cls_true, cls_pred)
 # --- Save Results ---
 timestamp = int(time.time())
 name = f"VGG-collision-avoidance-{timestamp}"
-plot_training_history(history, history_fine)
-plt.gcf().savefig(f"{name}.pdf", bbox_inches='tight')
+output_dir = "models"  # Output directory for models and plots
+os.makedirs(output_dir, exist_ok=True)  # Create directory if it doesn't exist
 
-model.save(f"models/{name}.keras")
-with open('trainHistoryDict_fine.pkl', 'wb') as f:
+fig = plot_training_history(history, history_fine, save_path=f"{output_dir}/{name}.pdf")
+plt.show()  # Optional: Display plot (remove in non-interactive environments)
+
+model.save(f"{output_dir}/{name}.keras")
+with open(f"{output_dir}/trainHistoryDict_fine_{timestamp}.pkl", 'wb') as f:
     pickle.dump(history_fine.history, f)
-model.save_weights(f"models/{name}_weights.weights.h5")
 
 session.close()
