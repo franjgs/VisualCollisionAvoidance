@@ -1,7 +1,38 @@
+# macOS-specific files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python virtual environments
 venv/
+env/
+*.venv
+
+# Project-specific directories
 image_data/
 videos/
 dataframes/
 models/
+
+# Output files
 *.pkl
 *.pdf
+*.keras
+*.h5
+
+# Python cache and temporary files
+__pycache__/
+*.py[cod]
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*~
+
+# Miscellaneous
+*.log
+*.bak
