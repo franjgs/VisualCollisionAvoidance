@@ -152,30 +152,24 @@ if base_model is not None:
     )
 
     # --- Fine-Tuning (Unfreeze some layers for CNNs) ---
-    base_model.trainable = True
-    if MODEL_NAME == "VGG16":
+    if MODEL_NAME == "VGG16":  # Apply fine-tuning only for VGG16
+        base_model.trainable = True
         for layer in base_model.layers:
             layer.trainable = 'block5' in layer.name or 'block4' in layer.name
-    elif MODEL_NAME in ["MobileNetV2", "MobileNetV3Small"]:
-        for layer in base_model.layers[int(len(base_model.layers) * 0.6):]:
-            layer.trainable = True
-    elif MODEL_NAME.startswith("EfficientNet"):
-        for layer in base_model.layers[int(len(base_model.layers) * 0.8):]: # Adjust based on EfficientNet size
-            layer.trainable = True
-    elif MODEL_NAME == "ResNet50":
-        for layer in base_model.layers[int(len(base_model.layers) * 0.7):]: # Adjust based on ResNet depth
-            layer.trainable = True
 
-    model.compile(optimizer=Adam(learning_rate=2e-8), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    history_fine = model.fit(
-        generator_train,
-        epochs=epochs * 2,
-        initial_epoch=epochs,
-        steps_per_epoch=steps_per_epoch,
-        validation_data=generator_test,
-        validation_steps=steps_test,
-        class_weight=class_weight
-    )
+        model.compile(optimizer=Adam(learning_rate=2e-8), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        history_fine = model.fit(
+            generator_train,
+            epochs=epochs * 2,
+            initial_epoch=epochs,
+            steps_per_epoch=steps_per_epoch,
+            validation_data=generator_test,
+            validation_steps=steps_test,
+            class_weight=class_weight
+        )
+    else:
+        history_fine = None # Set history_fine to None for other models
+
 else:
     print(f"Skipping initial training/fine-tuning for {MODEL_NAME}.")
     history = None
