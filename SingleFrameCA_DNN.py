@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 import pickle
 
-from tensorflow.keras.applications import VGG16, MobileNetV2, MobileNetV3Small, ResNet50
+from tensorflow.keras.applications import EfficientNetB0, VGG16, MobileNetV2, MobileNetV3Small, ResNet50
+from tensorflow.keras.applications.efficientnet import preprocess_input as efficientnet_preprocess_input
 from tensorflow.keras.applications.vgg16 import preprocess_input as vgg16_preprocess_input
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input as mobilenetv2_preprocess_input
 from tensorflow.keras.applications.mobilenet_v3 import preprocess_input as mobilenetv3_preprocess_input
@@ -25,7 +26,6 @@ from tensorflow.keras.layers import Dense, Flatten, Dropout, GlobalAveragePoolin
 from tensorflow.keras.optimizers import Adam
 from sklearn.utils.class_weight import compute_class_weight
 from tensorflow.compat.v1 import ConfigProto, InteractiveSession
-import efficientnet.keras as efn
 
 # Import functions from the utils folder
 from utils.data_processing import (
@@ -44,7 +44,7 @@ config.gpu_options.allow_growth = True
 session = InteractiveSession(config=config)
 
 # --- Define Model Choice ---
-MODEL_NAME = "EfficientNetB0"  # Options: "VGG16", "MobileNetV2", "MobileNetV3Small", "EfficientNetB0", "ResNet50"
+MODEL_NAME = "VGG16" #  "EfficientNetB0" # "MobileNetV3Small" # "ResNet50" # Options: "VGG16", "MobileNetV2", "MobileNetV3Small", "EfficientNet",
 
 # --- Main Script ---
 # Setup directories
@@ -52,7 +52,7 @@ output_base_dir = 'image_data'
 train_dir, test_dir = create_image_directories(output_base_dir)
 
 # Load and process data
-video_files, excel_files = generate_paired_file_lists(range_min=70, range_max=93)
+video_files, excel_files = generate_paired_file_lists(range_min=1, range_max=93)
 all_frames, all_labels, all_filenames = process_and_save_frames(
     excel_files, video_files, output_base_dir, target_size=(224, 224)
 )
@@ -77,7 +77,7 @@ def get_preprocessing_function(model_name):
     elif model_name in ["MobileNetV2", "MobileNetV3Small"]:
         return mobilenetv2_preprocess_input
     elif model_name.startswith("EfficientNet"):
-        return efn.preprocess_input
+        return efficientnet_preprocess_input # Use the TF built-in preprocess_input
     elif model_name == "ResNet50":
         return resnet_preprocess_input
     else:
@@ -110,7 +110,8 @@ input_shape = (224, 224, 3)
 base_model = None
 top_model = None
 model = None
-
+epochs = 20
+    
 if MODEL_NAME == "VGG16":
     base_model = VGG16(weights='imagenet', include_top=False, input_shape=input_shape)
     top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(len(class_names), activation='softmax')])
@@ -124,14 +125,16 @@ elif MODEL_NAME == "MobileNetV3Small":
     top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(len(class_names), activation='softmax')])
     model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
 elif MODEL_NAME.startswith("EfficientNet"):
-    base_model_fn = getattr(efn, MODEL_NAME)
-    base_model = base_model_fn(weights='imagenet', include_top=False, input_shape=input_shape)
+    # base_model_fn = getattr(efn, MODEL_NAME) # REMOVE THIS LINE
+    base_model = EfficientNetB0(weights='imagenet', include_top=False, input_shape=input_shape) # Use the TF built-in
     top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(len(class_names), activation='softmax')])
     model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
+    epochs = 40
 elif MODEL_NAME == "ResNet50":
     base_model = ResNet50(weights='imagenet', include_top=False, input_shape=input_shape)
     top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(len(class_names), activation='softmax')])
     model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
+    epochs = 40
 else:
     raise ValueError(f"Model name '{MODEL_NAME}' not recognized.")
 
@@ -139,7 +142,6 @@ else:
 if base_model is not None:
     base_model.trainable = False
     model.compile(optimizer=Adam(learning_rate=1e-5), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    epochs = 20
     steps_per_epoch = int(np.ceil(generator_train.n / batch_size))
 
     history = model.fit(
