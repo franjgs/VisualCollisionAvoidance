@@ -34,6 +34,9 @@ Autonomous navigation in dynamic environments requires robust collision avoidanc
 -   `SingleFrameCA_DNN.py`: Script for training and evaluating a single-frame collision avoidance DNN.
 -   `MultiFrameCA_DNN.py`: Script for training and evaluating a multi-frame collision avoidance DNN (CNN-LSTM).
 -   `GenerateMultiFrameData.py`: Script for generating multi-frame sequences from video and annotation data.
+-   `utils/`: Contains utility scripts:
+    -   `data_processing.py`: Handles frame extraction, preprocessing, and saving from video and Excel files.
+    -   `plotting_utils.py`: Provides functions for visualizing training history and evaluation metrics.
 -   `dataframes/`: Excel files (e.g., `video-00001.xlsx`) with frame-level collision annotations.
 -   `videos/`: Video files (e.g., `collision01.mp4`) for frame extraction.
 -   `labeled_sequences/`: Directory (created by `GenerateMultiFrameData.py`) containing processed multi-frame sequences in HDF5 files.
