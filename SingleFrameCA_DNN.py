@@ -75,7 +75,7 @@ all_filenames = process_and_save_frames(
 log_memory()
 
 # --- Data Generators ---
-batch_size = 20 # 8 # 20
+batch_size = 20
 datagen_train = ImageDataGenerator(
     preprocessing_function=None,  # Preprocessing handled by model-specific function
     width_shift_range=0.1,
@@ -102,7 +102,6 @@ def get_preprocessing_function(model_name):
 
 # --- Model Setup ---
 input_shape = (224, 224, 3)
-epochs = 20
     
 for MODEL_NAME in MODEL_LIST:
     print(f"\nTraining model: {MODEL_NAME}")
@@ -139,14 +138,17 @@ for MODEL_NAME in MODEL_LIST:
         base_model = VGG16(weights='imagenet', include_top=False, input_shape=input_shape)
         top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(len(class_names), activation='softmax')])
         model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
+        epochs = 20
     elif MODEL_NAME == "MobileNetV2":
         base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=input_shape)
         top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(len(class_names), activation='softmax')])
         model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
+        epochs = 20
     elif MODEL_NAME == "MobileNetV3Small":
         base_model = MobileNetV3Small(weights='imagenet', include_top=False, input_shape=input_shape)
         top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(len(class_names), activation='softmax')])
         model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
+        epochs = 20
     elif MODEL_NAME.startswith("EfficientNet"):
         base_model = EfficientNetB0(weights='imagenet', include_top=False, input_shape=input_shape)
         top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(len(class_names), activation='softmax')])
