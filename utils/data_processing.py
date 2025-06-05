@@ -42,17 +42,6 @@ def getFrameRate(video):
     """Retrieves the frame rate of a video."""
     return video.get(cv2.CAP_PROP_FPS)
 
-def generate_out_videoname(vid_base):
-    """Generates a standardized video name from a base name."""
-    if "video-" in vid_base:
-        return vid_base.split('.')[0]
-    try:
-        collision_num = vid_base.split('collision')[1]
-        return f"video-{collision_num.zfill(5)}"
-    except IndexError:
-        print(f"Warning: Invalid video name format '{vid_base}'. Using default.")
-        return 'video-00001'
-
 def generate_framename(video_num, pos_frame):
     """Generates a frame name from video number and frame position."""
     return f"video-{str(video_num).zfill(5)}-frame-{str(pos_frame).zfill(5)}"
@@ -140,7 +129,6 @@ def process_and_save_frames(excel_files, video_files, output_dir, target_size=(2
                 
                 # Skip if file exists
                 if os.path.exists(save_path):
-                    print(f"Skipping existing file: {save_path}")
                     filenames.append(save_path)
                     frame_count += 1
                     continue
