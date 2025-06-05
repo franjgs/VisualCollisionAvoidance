@@ -27,7 +27,7 @@ from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Dense, Flatten, Dropout, GlobalAveragePooling2D
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.optimizers.schedules import CosineDecay
-from tensorflow.keras.callbacks import ReduceLROnPlateau
+from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping
 
 from sklearn.utils.class_weight import compute_class_weight
 from tensorflow.compat.v1 import ConfigProto, InteractiveSession
@@ -75,7 +75,7 @@ all_filenames = process_and_save_frames(
 log_memory()
 
 # --- Data Generators ---
-batch_size = 20
+batch_size = 20 # 8 # 20
 datagen_train = ImageDataGenerator(
     preprocessing_function=None,  # Preprocessing handled by model-specific function
     width_shift_range=0.1,
@@ -133,121 +133,139 @@ for MODEL_NAME in MODEL_LIST:
     top_model = None
     model = None
 
-    # Model creation code remains the same
+    # --- Model creation --- 
     if MODEL_NAME == "VGG16":
         base_model = VGG16(weights='imagenet', include_top=False, input_shape=input_shape)
-        top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(len(class_names), activation='softmax')])
+        top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(1, activation='sigmoid')])
         model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
         epochs = 20
     elif MODEL_NAME == "MobileNetV2":
         base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=input_shape)
-        top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(len(class_names), activation='softmax')])
+        top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(1, activation='sigmoid')])
         model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
         epochs = 20
     elif MODEL_NAME == "MobileNetV3Small":
         base_model = MobileNetV3Small(weights='imagenet', include_top=False, input_shape=input_shape)
-        top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(len(class_names), activation='softmax')])
+        top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(1, activation='sigmoid')])
         model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
         epochs = 20
     elif MODEL_NAME.startswith("EfficientNet"):
         base_model = EfficientNetB0(weights='imagenet', include_top=False, input_shape=input_shape)
-        top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(len(class_names), activation='softmax')])
+        top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(1, activation='sigmoid')])
         model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
         epochs = 40
     elif MODEL_NAME == "ResNet50":
         base_model = ResNet50(weights='imagenet', include_top=False, input_shape=input_shape)
-        top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(len(class_names), activation='softmax')])
+        top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(1, activation='sigmoid')])
         model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
         epochs = 40
     else:
         raise ValueError(f"Model name '{MODEL_NAME}' not recognized.")
 
-    # Training and fine-tuning code remains the same
+    # --- Initial Training ---
     if base_model is not None:
         base_model.trainable = False
-        model.compile(optimizer=Adam(learning_rate=1e-5), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        model.compile(optimizer=Adam(learning_rate=1e-5), loss='binary_crossentropy', metrics=['accuracy'])
         steps_per_epoch = int(np.ceil(generator_train.n / batch_size))
-
+        
+        early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
         history = model.fit(
             generator_train,
             epochs=epochs,
             steps_per_epoch=steps_per_epoch,
             validation_data=generator_test,
             validation_steps=steps_test,
-            class_weight=class_weight
+            class_weight=class_weight,
+            callbacks=[early_stopping]
         )
 
+        # --- Fine-Tuning ---
         base_model.trainable = True
+        fine_tune_epochs = epochs * 2
         if MODEL_NAME == "VGG16":
             for layer in base_model.layers:
                 layer.trainable = 'block5' in layer.name or 'block4' in layer.name
-            model.compile(optimizer=Adam(learning_rate=2e-8), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+            model.compile(optimizer=Adam(learning_rate=1e-6), loss='binary_crossentropy', metrics=['accuracy'])
             history_fine = model.fit(
                 generator_train,
-                epochs=epochs * 2,
-                initial_epoch=epochs,
-                steps_per_epoch=steps_per_epoch,
-                validation_data=generator_test,
-                validation_steps=steps_test,
-                class_weight=class_weight
-            )
-        elif MODEL_NAME == "MobileNetV2":
-            for layer in base_model.layers:
-                layer.trainable = 'block16' in layer.name or 'Conv_1' in layer.name
-            model.compile(optimizer=Adam(learning_rate=2e-8), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-            history_fine = model.fit(
-                generator_train,
-                epochs=epochs * 2,
-                initial_epoch=epochs,
-                steps_per_epoch=steps_per_epoch,
-                validation_data=generator_test,
-                validation_steps=steps_test,
-                class_weight=class_weight
-            )
-        elif MODEL_NAME == "ResNet50":
-            for layer in base_model.layers:
-                layer.trainable = 'conv5' in layer.name
-            decay_steps = steps_per_epoch * epochs
-            cosine_lr = CosineDecay(initial_learning_rate=1e-4, decay_steps=decay_steps, alpha=0.1)
-            plateau_cb = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-9, verbose=1)
-            model.compile(optimizer=Adam(learning_rate=2e-8), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-            history_fine = model.fit(
-                generator_train,
-                epochs=epochs * 2,
+                epochs=fine_tune_epochs,
                 initial_epoch=epochs,
                 steps_per_epoch=steps_per_epoch,
                 validation_data=generator_test,
                 validation_steps=steps_test,
                 class_weight=class_weight,
-                callbacks=[plateau_cb]
+                callbacks=[early_stopping]
+            )
+        elif MODEL_NAME == "MobileNetV2":
+            for layer in base_model.layers:
+                layer.trainable = 'block16' in layer.name or 'Conv_1' in layer.name
+            model.compile(optimizer=Adam(learning_rate=1e-6), loss='binary_crossentropy', metrics=['accuracy'])
+            history_fine = model.fit(
+                generator_train,
+                epochs=fine_tune_epochs,
+                initial_epoch=epochs,
+                steps_per_epoch=steps_per_epoch,
+                validation_data=generator_test,
+                validation_steps=steps_test,
+                class_weight=class_weight,
+                callbacks=[early_stopping]
+            )
+        elif MODEL_NAME == "ResNet50":
+            for layer in base_model.layers:
+                layer.trainable = 'conv5' in layer.name
+            decay_steps = steps_per_epoch * fine_tune_epochs
+            cosine_lr = CosineDecay(initial_learning_rate=1e-6, decay_steps=decay_steps, alpha=0.1)
+            plateau_cb = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-9, verbose=1)
+            model.compile(optimizer=Adam(learning_rate=1e-6), loss='binary_crossentropy', metrics=['accuracy'])
+            history_fine = model.fit(
+                generator_train,
+                epochs=fine_tune_epochs,
+                initial_epoch=epochs,
+                steps_per_epoch=steps_per_epoch,
+                validation_data=generator_test,
+                validation_steps=steps_test,
+                class_weight=class_weight,
+                callbacks=[early_stopping, plateau_cb]
             )
         else:
-            history_fine = None
+            # For MobileNetV3Small and EfficientNetB0, fine-tune all layers with caution
+            model.compile(optimizer=Adam(learning_rate=1e-6), loss='binary_crossentropy', metrics=['accuracy'])
+            history_fine = model.fit(
+                generator_train,
+                epochs=fine_tune_epochs,
+                initial_epoch=epochs,
+                steps_per_epoch=steps_per_epoch,
+                validation_data=generator_test,
+                validation_steps=steps_test,
+                class_weight=class_weight,
+                callbacks=[early_stopping]
+            )
 
-    # Evaluation and saving code remains the same
+    # --- Evaluation ---
     if model is not None:
         model.evaluate(generator_test, steps=steps_test)
         generator_test.reset()
         y_pred = model.predict(generator_test, steps=steps_test)
-        cls_pred = np.argmax(y_pred, axis=1)
+        y_pred = (y_pred > 0.5).astype(int).flatten()  # Threshold for binary classification
         cls_true = generator_test.classes
-        example_errors(cls_true, cls_pred, generator_test, class_names)
-
+        example_errors(cls_true, y_pred, generator_test, class_names)
+    
+        # --- Save Results ---
         timestamp = int(time.time())
-        name = f"{MODEL_NAME}-collision-avoidance-{timestamp}"
+        name = f"{MODEL_NAME}_collision_avoidance_{timestamp}"
         if history:
             fig = plot_training_history(history, MODEL_NAME, history_fine, save_path=f"{output_dir}/{name}.pdf")
             plt.show()
-
+        
         model.save(f"{output_dir}/{name}.keras")
         if history_fine:
-            with open(f"{output_dir}/trainHistoryDict_fine_{timestamp}.pkl", 'wb') as f:
+            with open(f"{output_dir}/{MODEL_NAME}_trainHistoryDict_fine_{timestamp}.pkl", 'wb') as f:
                 pickle.dump(history_fine.history, f)
         elif history:
-            with open(f"{output_dir}/trainHistoryDict_{timestamp}.pkl", 'wb') as f:
+            with open(f"{output_dir}/{MODEL_NAME}_trainHistoryDict_{timestamp}.pkl", 'wb') as f:
                 pickle.dump(history.history, f)
 
-    # Clear memory
+    # --- Clear memory --- 
     tf.keras.backend.clear_session()
     del model, base_model, top_model, generator_train, generator_test
     gc.collect()
