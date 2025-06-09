@@ -13,17 +13,35 @@ from sklearn.metrics import confusion_matrix
 import os
 import cv2
 
-def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion Matrix', cmap=plt.cm.Blues):
-    """Plots a confusion matrix, with optional normalization."""
+def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion Matrix', cmap=plt.cm.Blues,
+                          bal_acc=None, pfa=None, pd=None, save_path=None):
+    """Plots a confusion matrix, with optional normalization, and includes metrics in title.
+
+    Args:
+        cm (np.ndarray): The confusion matrix.
+        classes (list): List of class names (e.g., ['no_collision', 'collision']).
+        normalize (bool, optional): Whether to normalize the confusion matrix. Defaults to False.
+        title (str, optional): Base title for the plot. Defaults to 'Confusion Matrix'.
+        cmap (matplotlib.colors.Colormap, optional): Colormap for the plot. Defaults to plt.cm.Blues.
+        bal_acc (float, optional): Balanced Accuracy to display in the title.
+        pfa (float, optional): Probability of False Alarm to display in the title.
+        pd (float, optional): Probability of Detection (True Positive Rate) to display in the title.
+        save_path (str, optional): Path to save the plot as a PDF. Defaults to None.
+    """
     if normalize:
         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
         fmt = '.2f'
     else:
         fmt = 'd'
 
-    plt.figure()
+    plt.figure(figsize=(8, 6)) # Increased figure size for better readability of metrics
     plt.imshow(cm, interpolation='nearest', cmap=cmap)
-    plt.title(title)
+
+    full_title = title
+    if bal_acc is not None and pfa is not None and pd is not None:
+        full_title += f'\nBalAcc: {bal_acc:.2f}, pFA: {pfa:.2f}, pD: {pd:.2f}'
+
+    plt.title(full_title)
     plt.colorbar()
     tick_marks = np.arange(len(classes))
     plt.xticks(tick_marks, classes, rotation=45)
@@ -39,9 +57,16 @@ def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion Matrix'
     plt.tight_layout()
     plt.ylabel('True Label')
     plt.xlabel('Predicted Label')
-    plt.show()
 
-def plot_images(images, cls_true, class_names, cls_pred=None, smooth=True):
+    if save_path:
+        # Ensure the directory for saving exists
+        os.makedirs(os.path.dirname(save_path) or '.', exist_ok=True)
+        plt.savefig(save_path, bbox_inches='tight', format='pdf')
+        print(f"Saved confusion matrix plot to {save_path}")
+    plt.show() # Keep plt.show() to display the plot during execution
+
+
+def plot_images(images, cls_true, class_names, cls_pred=None, smooth=True, save_path=None, model_name=None):
     """Plots up to 9 images with their true and predicted labels.
 
     Args:
@@ -50,6 +75,8 @@ def plot_images(images, cls_true, class_names, cls_pred=None, smooth=True):
         class_names (list): List of class names (strings).
         cls_pred (np.ndarray, optional): Array of predicted class labels (indices). Defaults to None.
         smooth (bool, optional): Whether to use smooth interpolation. Defaults to True.
+        save_path (str, optional): Base path to save the plot. Defaults to None.
+        model_name (str, optional): Name of the model for the filename. Defaults to None.
     """
     assert len(images) == len(cls_true)
     fig, axes = plt.subplots(3, 3, figsize=(9, 9))
@@ -68,14 +95,41 @@ def plot_images(images, cls_true, class_names, cls_pred=None, smooth=True):
             ax.set_xticks([])
             ax.set_yticks([])
 
+    if save_path:
+
+        # Ensure the directory for saving exists
+        os.makedirs(os.path.dirname(save_path) or '.', exist_ok=True)
+        plt.savefig(save_path, bbox_inches='tight', format='pdf')
+        print(f"Saved image plot to {save_path}")
     plt.show()
 
 def load_images(image_paths):
-    """Loads images from a list of file paths."""
-    return np.array([cv2.imread(path) for path in image_paths if os.path.exists(path)])
+    """Loads images from a list of file paths. Converts from BGR (OpenCV) to RGB (Matplotlib)."""
+    loaded_images = []
+    for path in image_paths:
+        if os.path.exists(path):
+            img = cv2.imread(path)
+            if img is not None:
+                loaded_images.append(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+            else:
+                print(f"Warning: Could not read image file: {path}")
+        else:
+            print(f"Warning: Image file not found: {path}")
+    return np.array(loaded_images)
 
-def example_errors(cls_true, cls_pred, generator_test, class_names):
-    """Visualizes misclassified images and plots the confusion matrix."""
+
+def example_errors(cls_true, cls_pred, generator_test, class_names, output_dir=None, model_name=None):
+    """Visualizes misclassified images and plots the confusion matrix, including metrics.
+
+    Args:
+        cls_true (np.ndarray): Array of true class labels (indices).
+        cls_pred (np.ndarray): Array of predicted class labels (indices).
+        generator_test: Keras ImageDataGenerator (or similar) with .filepaths, used for getting image paths.
+                        For multi-frame, this might not be directly applicable for image visualization.
+        class_names (list): List of class names (strings).
+        output_dir (str, optional): Directory to save plots.
+        model_name (str, optional): Name of the model for plot titles/filenames.
+    """
     print("Analyzing misclassifications...")
     incorrect = cls_true != cls_pred
     num_incorrect = np.sum(incorrect)
@@ -83,17 +137,67 @@ def example_errors(cls_true, cls_pred, generator_test, class_names):
 
     if num_incorrect > 0:
         incorrect_indices = np.where(incorrect)[0][:9]
-        misclassified_images = load_images(np.array(generator_test.filepaths)[incorrect_indices])
-        if len(misclassified_images) > 0:
-            plot_images(
-                images=misclassified_images,
-                cls_true=cls_true[incorrect_indices],
-                class_names=class_names,  # Pass class_names here
-                cls_pred=cls_pred[incorrect_indices]
-            )
+        # This part is primarily for single-frame models using ImageDataGenerator.
+        # For multi-frame, 'generator_test.filepaths' might not exist or be relevant
+        # if you're loading .npy sequences. You would need a different mechanism
+        # to retrieve/display misclassified sequence frames.
+        try:
+            if hasattr(generator_test, 'filepaths'):
+                misclassified_images = load_images(np.array(generator_test.filepaths)[incorrect_indices])
+                if len(misclassified_images) > 0:
+                    # Prepare save path for misclassified images plot
+                    img_save_path = None
+                    if output_dir:
+                        if model_name:
+                            img_filename = f'{model_name}_Misclassified_Images.pdf'
+                        else:
+                            img_filename = 'Misclassified_Images.pdf'
+                        # model_name will be added by plot_images
+                        img_save_path = os.path.join(output_dir, img_filename)
+
+                    plot_images(
+                        images=misclassified_images,
+                        cls_true=cls_true[incorrect_indices],
+                        class_names=class_names,
+                        cls_pred=cls_pred[incorrect_indices],
+                        save_path=img_save_path, # Pass the base save path
+                        model_name=model_name # Pass the model name
+                    )
+            else:
+                print("Note: Skipping visualization of misclassified images as 'generator_test.filepaths' is not available.")
+        except Exception as e:
+            print(f"Error visualizing misclassified images: {e}")
+
 
     cm = confusion_matrix(y_true=cls_true, y_pred=cls_pred)
-    plot_confusion_matrix(cm=cm, classes=class_names)
+
+    # Calculate metrics
+    # Assuming binary classification where class_names[0] is negative ('no_collision'), class_names[1] is positive ('collision')
+    # If your classes are ordered differently, adjust indices (e.g., cm[0,0] for positive, cm[1,1] for negative)
+    TP = cm[1, 1] if cm.shape[0] > 1 and cm.shape[1] > 1 else 0 # True Positives (Actual 1, Predicted 1)
+    TN = cm[0, 0] if cm.shape[0] > 0 and cm.shape[1] > 0 else 0 # True Negatives (Actual 0, Predicted 0)
+    FP = cm[0, 1] if cm.shape[0] > 0 and cm.shape[1] > 1 else 0 # False Positives (Actual 0, Predicted 1) - Type I error / False Alarm
+    FN = cm[1, 0] if cm.shape[0] > 1 and cm.shape[1] > 0 else 0 # False Negatives (Actual 1, Predicted 0) - Type II error / Missed Detection
+
+    # Handle division by zero for robustness (e.g., if a class has no true samples)
+    pD = TP / (TP + FN) if (TP + FN) > 0 else 0.0 # Probability of Detection (True Positive Rate/Recall)
+    pFA = FP / (FP + TN) if (FP + TN) > 0 else 0.0 # Probability of False Alarm (False Positive Rate)
+    TNR = TN / (TN + FP) if (TN + FP) > 0 else 0.0 # True Negative Rate (Specificity)
+
+    bal_acc = (pD + TNR) / 2.0 # Balanced Accuracy
+
+    # Prepare save path for confusion matrix
+    cm_save_path = None
+    if output_dir:
+        cm_filename = 'Confusion_Matrix.pdf'
+        if model_name:
+            cm_filename = f'{model_name}_Confusion_Matrix.pdf'
+        cm_save_path = os.path.join(output_dir, cm_filename)
+
+    plot_confusion_matrix(cm=cm, classes=class_names,
+                          title=f'Confusion Matrix for {model_name}',
+                          bal_acc=bal_acc, pfa=pFA, pd=pD,
+                          save_path=cm_save_path)
 
 def plot_training_history(history, model_name, history_fine=None, save_path=None):
     """Plots training and validation accuracy and loss, including fine-tuning if provided,
@@ -148,11 +252,8 @@ def plot_training_history(history, model_name, history_fine=None, save_path=None
         plt.title('Loss')
         
     if save_path:
-        # Include model name in filename
-        base_path, ext = os.path.splitext(save_path)
-        save_path_with_model_name = f"{base_path}_{model_name}{ext}"
-        fig.savefig(save_path_with_model_name, bbox_inches='tight', format='pdf')
-        print(f"Saved plot to {save_path_with_model_name}")
+        fig.savefig(save_path, bbox_inches='tight', format='pdf')
+        print(f"Saved plot to {save_path}")
 
     return fig
 

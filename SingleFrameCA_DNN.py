@@ -26,6 +26,7 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Dense, Flatten, Dropout, GlobalAveragePooling2D
 from tensorflow.keras.optimizers import Adam
+# from tensorflow.keras.optimizers.legacy import Adam
 from tensorflow.keras.optimizers.schedules import CosineDecay
 from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping
 
@@ -56,13 +57,13 @@ def log_memory():
     
     
 # --- Define Model Choice ---
-MODEL_LIST = ["EfficientNet", "MobileNetV2", "ResNet50", "EfficientNetB0", "MobileNetV3Small"] # "ResNet50" # Options: "VGG16", "MobileNetV2", "MobileNetV3Small", "EfficientNet",
+MODEL_LIST = [ "VGG16", "ResNet50", "EfficientNet", "MobileNetV2", "EfficientNetB0"] # "ResNet50" # Options: "VGG16", "MobileNetV2", "MobileNetV3Small", "EfficientNet",
 
 # --- Main Script ---
 # Setup directories
 output_base_dir = 'image_data'
-train_dir, test_dir = create_image_directories(output_base_dir)
-
+train_dir = os.path.join(output_base_dir, 'train')
+test_dir = os.path.join(output_base_dir, 'test')
 output_dir = "models"  # Output directory for models and plots
 os.makedirs(output_dir, exist_ok=True)  # Create directory if it doesn't exist
 
@@ -102,7 +103,23 @@ def get_preprocessing_function(model_name):
 
 # --- Model Setup ---
 input_shape = (224, 224, 3)
-    
+n_hidden = 1024
+
+model_configs = {
+    "binary_sigmoid": {
+        "num_output_units": 1,
+        "activation_function": "sigmoid",
+        "loss_function": "binary_crossentropy"
+    },
+    "multiclass_softmax": {
+        "num_output_units": 2, # len(class_names), # This will be 2 for binary classification
+        "activation_function": "softmax",
+        "loss_function": "sparse_categorical_crossentropy" # Or 'categorical_crossentropy' if your labels were one-hot encoded
+    }
+}
+selected_config = model_configs['binary_sigmoid']
+
+  
 for MODEL_NAME in MODEL_LIST:
     print(f"\nTraining model: {MODEL_NAME}")
     log_memory()
@@ -136,36 +153,78 @@ for MODEL_NAME in MODEL_LIST:
     # --- Model creation --- 
     if MODEL_NAME == "VGG16":
         base_model = VGG16(weights='imagenet', include_top=False, input_shape=input_shape)
-        top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(1, activation='sigmoid')])
-        model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
+        model = Sequential([
+            base_model,
+            Flatten(),
+            Dense(n_hidden, activation='relu'),
+            Dropout(0.5),
+            Dense(
+                selected_config["num_output_units"], # Use selected_config here
+                activation=selected_config["activation_function"]
+            )
+        ])
         epochs = 20
     elif MODEL_NAME == "MobileNetV2":
         base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=input_shape)
-        top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(1, activation='sigmoid')])
-        model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
+        model = Sequential([
+            base_model,
+            Flatten(),
+            Dense(n_hidden, activation='relu'),
+            Dropout(0.5),
+            Dense(
+                selected_config["num_output_units"], # Use selected_config here
+                activation=selected_config["activation_function"]
+            )
+        ])
         epochs = 20
     elif MODEL_NAME == "MobileNetV3Small":
         base_model = MobileNetV3Small(weights='imagenet', include_top=False, input_shape=input_shape)
-        top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(1, activation='sigmoid')])
-        model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
-        epochs = 20
+        model = Sequential([
+            base_model,
+            Flatten(),
+            Dense(n_hidden, activation='relu'),
+            Dropout(0.5),
+            Dense(
+                selected_config["num_output_units"], # Use selected_config here
+                activation=selected_config["activation_function"]
+            )
+        ])
+        epochs = 40
     elif MODEL_NAME.startswith("EfficientNet"):
         base_model = EfficientNetB0(weights='imagenet', include_top=False, input_shape=input_shape)
-        top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(1, activation='sigmoid')])
-        model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
-        epochs = 40
+        model = Sequential([
+            base_model,
+            Flatten(),
+            Dense(n_hidden, activation='relu'),
+            Dropout(0.5),
+            Dense(
+                selected_config["num_output_units"], # Use selected_config here
+                activation=selected_config["activation_function"]
+            )
+        ])
+        epochs = 60
     elif MODEL_NAME == "ResNet50":
         base_model = ResNet50(weights='imagenet', include_top=False, input_shape=input_shape)
-        top_model = Sequential([GlobalAveragePooling2D(), Dense(1024, activation='relu'), Dropout(0.5), Dense(1, activation='sigmoid')])
-        model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
-        epochs = 40
+        model = Sequential([
+           base_model,
+           Flatten(),
+           Dense(n_hidden, activation='relu'),
+           Dropout(0.5),
+           Dense(
+               selected_config["num_output_units"], # Use selected_config here
+               activation=selected_config["activation_function"]
+           )
+       ])
+        epochs = 20
     else:
         raise ValueError(f"Model name '{MODEL_NAME}' not recognized.")
 
     # --- Initial Training ---
     if base_model is not None:
         base_model.trainable = False
-        model.compile(optimizer=Adam(learning_rate=1e-5), loss='binary_crossentropy', metrics=['accuracy'])
+        model.compile(optimizer=Adam(learning_rate=1e-5), 
+                      loss=selected_config["loss_function"],
+                      metrics=['accuracy'])
         steps_per_epoch = int(np.ceil(generator_train.n / batch_size))
         
         early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
@@ -176,7 +235,7 @@ for MODEL_NAME in MODEL_LIST:
             validation_data=generator_test,
             validation_steps=steps_test,
             class_weight=class_weight,
-            callbacks=[early_stopping]
+            # callbacks=[early_stopping]
         )
 
         # --- Fine-Tuning ---
@@ -185,7 +244,9 @@ for MODEL_NAME in MODEL_LIST:
         if MODEL_NAME == "VGG16":
             for layer in base_model.layers:
                 layer.trainable = 'block5' in layer.name or 'block4' in layer.name
-            model.compile(optimizer=Adam(learning_rate=1e-6), loss='binary_crossentropy', metrics=['accuracy'])
+            model.compile(optimizer=Adam(learning_rate=2e-8), 
+                          loss=selected_config["loss_function"],
+                          metrics=['accuracy'])
             history_fine = model.fit(
                 generator_train,
                 epochs=fine_tune_epochs,
@@ -195,11 +256,15 @@ for MODEL_NAME in MODEL_LIST:
                 validation_steps=steps_test,
                 class_weight=class_weight,
                 callbacks=[early_stopping]
+                # Better, early stopping
             )
         elif MODEL_NAME == "MobileNetV2":
+            # Works well
             for layer in base_model.layers:
                 layer.trainable = 'block16' in layer.name or 'Conv_1' in layer.name
-            model.compile(optimizer=Adam(learning_rate=1e-6), loss='binary_crossentropy', metrics=['accuracy'])
+            model.compile(optimizer=Adam(learning_rate=1e-6), 
+                          loss=selected_config["loss_function"],
+                          metrics=['accuracy'])
             history_fine = model.fit(
                 generator_train,
                 epochs=fine_tune_epochs,
@@ -208,60 +273,81 @@ for MODEL_NAME in MODEL_LIST:
                 validation_data=generator_test,
                 validation_steps=steps_test,
                 class_weight=class_weight,
-                callbacks=[early_stopping]
+                # callbacks=[early_stopping]
             )
         elif MODEL_NAME == "ResNet50":
             for layer in base_model.layers:
+                # Unfreeze conv5_x blocks
                 layer.trainable = 'conv5' in layer.name
+                # Explicitly keep BatchNormalization layers frozen
+                if isinstance(layer, tf.keras.layers.BatchNormalization):
+                    layer.trainable = False
+                    
             decay_steps = steps_per_epoch * fine_tune_epochs
-            cosine_lr = CosineDecay(initial_learning_rate=1e-6, decay_steps=decay_steps, alpha=0.1)
-            plateau_cb = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-9, verbose=1)
-            model.compile(optimizer=Adam(learning_rate=1e-6), loss='binary_crossentropy', metrics=['accuracy'])
+            # Pass the CosineDecay schedule directly to the optimizer's learning_rate argument
+            cosine_lr = CosineDecay(initial_learning_rate=1e-4, decay_steps=decay_steps, alpha=0.1)
+
+            # Recompile the model after changing trainable status, passing the learning rate schedule
+            model.compile(optimizer=Adam(learning_rate=cosine_lr), # Pass the schedule here
+                          loss=selected_config["loss_function"],
+                          metrics=['accuracy'])
+            
             history_fine = model.fit(
                 generator_train,
                 epochs=fine_tune_epochs,
-                initial_epoch=epochs,
+                initial_epoch=epochs, # Start fine-tuning from where initial training left off
                 steps_per_epoch=steps_per_epoch,
                 validation_data=generator_test,
                 validation_steps=steps_test,
                 class_weight=class_weight,
-                callbacks=[early_stopping, plateau_cb]
+                # callbacks=[early_stopping] # Use only early_stopping or adjust callbacks carefully
+                # Better, no early stopping
             )
         else:
-            # For MobileNetV3Small and EfficientNetB0, fine-tune all layers with caution
-            model.compile(optimizer=Adam(learning_rate=1e-6), loss='binary_crossentropy', metrics=['accuracy'])
-            history_fine = model.fit(
-                generator_train,
-                epochs=fine_tune_epochs,
-                initial_epoch=epochs,
-                steps_per_epoch=steps_per_epoch,
-                validation_data=generator_test,
-                validation_steps=steps_test,
-                class_weight=class_weight,
-                callbacks=[early_stopping]
-            )
+            class DummyHistory:
+                """
+                A simple class to mimic the structure of a Keras History object.
+                """
+                def __init__(self):
+                    self.history = {} # Initialize the 'history' attribute as an empty dictionary
+            
+            # To create your dummy object:
+            history_fine = DummyHistory()
 
     # --- Evaluation ---
     if model is not None:
         model.evaluate(generator_test, steps=steps_test)
         generator_test.reset()
         y_pred = model.predict(generator_test, steps=steps_test)
-        y_pred = (y_pred > 0.5).astype(int).flatten()  # Threshold for binary classification
+        # --- Adapt cls_pred calculation based on the chosen model configuration ---
+        if selected_config["activation_function"] == "sigmoid":
+            # For sigmoid output (binary_sigmoid config), threshold at 0.5
+            cls_pred = (y_pred > 0.5).astype(int).flatten()
+        elif selected_config["activation_function"] == "softmax":
+            # For softmax output (multiclass_softmax config), take argmax
+            cls_pred = np.argmax(y_pred, axis=1)
+        else:
+            # Fallback or error if an unexpected activation is used
+            print(f"Warning: Unexpected activation function '{selected_config['activation_function']}'. Defaulting to argmax for cls_pred.")
+            cls_pred = np.argmax(y_pred, axis=1)
+        
         cls_true = generator_test.classes
-        example_errors(cls_true, y_pred, generator_test, class_names)
-    
+        # Pass output_dir and MODEL_NAME to example_errors
+        example_errors(cls_true, cls_pred, generator_test, class_names, output_dir=output_dir, model_name=MODEL_NAME)
         # --- Save Results ---
         timestamp = int(time.time())
         name = f"{MODEL_NAME}_collision_avoidance_{timestamp}"
-        if history:
+        if any(history_fine.history):
             fig = plot_training_history(history, MODEL_NAME, history_fine, save_path=f"{output_dir}/{name}.pdf")
-            plt.show()
+        elif any(history.history):
+            fig = plot_training_history(history, MODEL_NAME, None, save_path=f"{output_dir}/{name}.pdf")
+        plt.show()
         
         model.save(f"{output_dir}/{name}.keras")
-        if history_fine:
+        if any(history_fine.history):
             with open(f"{output_dir}/{MODEL_NAME}_trainHistoryDict_fine_{timestamp}.pkl", 'wb') as f:
                 pickle.dump(history_fine.history, f)
-        elif history:
+        elif any(history.history):
             with open(f"{output_dir}/{MODEL_NAME}_trainHistoryDict_{timestamp}.pkl", 'wb') as f:
                 pickle.dump(history.history, f)
 

@@ -14,6 +14,8 @@ import pandas as pd
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 import h5py
+import shutil # Import shutil for directory removal
+
 
 def open_video(video):
     """Opens a video file for processing."""
@@ -50,14 +52,18 @@ def generate_video_num(out_videoname):
     """Extracts the video number from a video name."""
     return int(out_videoname.split('-')[1])
 
+# --- Helper function for directory management (simplified to just create) ---
 def create_image_directories(output_base_dir):
+    """Creates the necessary train/test/0/1 directories, ensuring they exist.
+    This function is called *after* any necessary cleanup has occurred.
+    """
     train_dir = os.path.join(output_base_dir, 'train')
     test_dir = os.path.join(output_base_dir, 'test')
-    
-    for dir_path in [train_dir, test_dir]:
-        for label in ['0', '1']:
-            os.makedirs(os.path.join(dir_path, label), exist_ok=True)
-    
+
+    os.makedirs(os.path.join(train_dir, '0'), exist_ok=True)
+    os.makedirs(os.path.join(train_dir, '1'), exist_ok=True)
+    os.makedirs(os.path.join(test_dir, '0'), exist_ok=True)
+    os.makedirs(os.path.join(test_dir, '1'), exist_ok=True)
     return train_dir, test_dir
 
 def generate_paired_file_lists(range_min=70, range_max=93):
@@ -78,17 +84,59 @@ def generate_out_videoname(video_base):
     video_num = video_base.replace('collision', '')
     return f"video-{int(video_num):05d}"
 
+# --- The main function to modify ---
 def process_and_save_frames(excel_files, video_files, output_dir, target_size=(224, 224), train_ratio=0.8):
-    """Processes video frames, saves them to directories, and returns filenames."""
-    create_image_directories(output_dir)
+    """Processes video frames, saves them to directories.
+    It will skip processing if the output directories already fully exist,
+    otherwise, it clears and recreates them before processing.
+
+    Args:
+        excel_files (list): List of paths to Excel annotation files.
+        video_files (list): List of paths to video files.
+        output_dir (str): Base directory where 'train' and 'test' folders will be created.
+        target_size (tuple): Target (height, width) for resizing frames.
+        train_ratio (float): Ratio of frames to assign to the training set.
+
+    Returns:
+        list: List of paths to the saved frame images. (Empty if processing is skipped).
+    """
+    # Define paths to the specific class subdirectories
+    train_dir = os.path.join(output_dir, 'train')
+    test_dir = os.path.join(output_dir, 'test')
+    
+    train_collision_dir = os.path.join(train_dir, '1')
+    train_no_collision_dir = os.path.join(train_dir, '0')
+    test_collision_dir = os.path.join(test_dir, '1')
+    test_no_collision_dir = os.path.join(test_dir, '0')
+
+    # Check if the full expected directory structure for saved frames already exists
+    all_dirs_exist = (os.path.exists(train_collision_dir) and
+                      os.path.exists(train_no_collision_dir) and
+                      os.path.exists(test_collision_dir) and
+                      os.path.exists(test_no_collision_dir))
+
+    if all_dirs_exist:
+        # If all target directories are found, skip processing
+        print(f"Output directories already exist and are complete at '{output_dir}'. Skipping frame processing.")
+        return [] # Return an empty list as no new files were processed/saved
+
+    # If the full structure is not found or incomplete, proceed to clear and recreate
+    print(f"Output directories not fully found or are incomplete at '{output_dir}'. Clearing and recreating the structure.")
+    if os.path.exists(output_dir):
+        # Remove the entire base output directory and its contents
+        shutil.rmtree(output_dir) 
+    
+    # Recreate the fresh directory structure (output_dir/train/0, /train/1, /test/0, /test/1)
+    create_image_directories(output_dir) 
+
     
     filenames = []
-    
+    np.random.seed(42)  # Set seed for consistency
+
     for excel_file, video_file in tqdm(zip(excel_files, video_files), total=len(excel_files), desc="Processing videos"):
         if not (os.path.exists(excel_file) and os.path.exists(video_file)):
             print(f"Skipping: File missing - Excel: {excel_file}, Video: {video_file}")
             continue
-
         try:
             df = pd.read_excel(excel_file)
         except Exception as e:
@@ -126,12 +174,6 @@ def process_and_save_frames(excel_files, video_files, output_dir, target_size=(2
                 split = 'train' if np.random.rand() < train_ratio else 'test'
                 label_dir = os.path.join(output_dir, split, str(label))
                 save_path = os.path.join(label_dir, f"{frame_name}.png")
-                
-                # Skip if file exists
-                if os.path.exists(save_path):
-                    filenames.append(save_path)
-                    frame_count += 1
-                    continue
                 
                 if cv2.imwrite(save_path, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)):
                     filenames.append(save_path)
