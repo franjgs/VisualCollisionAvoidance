@@ -244,9 +244,15 @@ for MODEL_NAME in MODEL_LIST:
         if MODEL_NAME == "VGG16":
             for layer in base_model.layers:
                 layer.trainable = 'block5' in layer.name or 'block4' in layer.name
-            model.compile(optimizer=Adam(learning_rate=2e-8), 
+                
+            # Use the legacy Adam optimizer for M1/M2 Mac compatibility
+            # Always create a NEW optimizer instance when recompiling after changing trainable status
+            fine_tune_optimizer = tf.keras.optimizers.legacy.Adam(learning_rate=2e-8)
+        
+            model.compile(optimizer=fine_tune_optimizer,
                           loss=selected_config["loss_function"],
                           metrics=['accuracy'])
+            
             history_fine = model.fit(
                 generator_train,
                 epochs=fine_tune_epochs,
@@ -262,9 +268,14 @@ for MODEL_NAME in MODEL_LIST:
             # Works well
             for layer in base_model.layers:
                 layer.trainable = 'block16' in layer.name or 'Conv_1' in layer.name
-            model.compile(optimizer=Adam(learning_rate=1e-6), 
+                
+            # Always create a NEW optimizer instance when recompiling after changing trainable status
+            fine_tune_optimizer = tf.keras.optimizers.legacy.Adam(learning_rate=1e-6)
+        
+            model.compile(optimizer=fine_tune_optimizer,
                           loss=selected_config["loss_function"],
                           metrics=['accuracy'])
+
             history_fine = model.fit(
                 generator_train,
                 epochs=fine_tune_epochs,
@@ -276,32 +287,59 @@ for MODEL_NAME in MODEL_LIST:
                 # callbacks=[early_stopping]
             )
         elif MODEL_NAME == "ResNet50":
+            # Set all layers in the base model to trainable=True by default first.
+            # Then, selectively set some to False and handle BatchNormalization layers.
             for layer in base_model.layers:
-                # Unfreeze conv5_x blocks
-                layer.trainable = 'conv5' in layer.name
-                # Explicitly keep BatchNormalization layers frozen
+                layer.trainable = True # Start by making all base model layers trainable
+
+            # Now, iterate again to specifically set trainability based on block name
+            # and to explicitly keep BatchNormalization layers frozen.
+            for layer in base_model.layers:
+                # Unfreeze 'conv5' blocks (the last stage of ResNet50)
+                # If a layer's name contains 'conv5', it should be trainable.
+                # All other layers will remain trainable=False if not explicitly set to True above,
+                # but we'll ensure only conv5 is trainable if that's the strategy.
+                if 'conv5' in layer.name:
+                    layer.trainable = True
+                else:
+                    layer.trainable = False # Explicitly freeze layers outside conv5
+
+                # Crucially, keep BatchNormalization layers frozen.
+                # This prevents instability from updating BN stats with potentially different data distributions or small batch sizes.
                 if isinstance(layer, tf.keras.layers.BatchNormalization):
                     layer.trainable = False
-                    
-            decay_steps = steps_per_epoch * fine_tune_epochs
-            # Pass the CosineDecay schedule directly to the optimizer's learning_rate argument
-            cosine_lr = CosineDecay(initial_learning_rate=1e-4, decay_steps=decay_steps, alpha=0.1)
 
-            # Recompile the model after changing trainable status, passing the learning rate schedule
-            model.compile(optimizer=Adam(learning_rate=cosine_lr), # Pass the schedule here
+            # Calculate decay steps for the CosineDecay learning rate schedule.
+            decay_steps = steps_per_epoch * fine_tune_epochs
+
+            # Define the CosineDecay learning rate schedule.
+            # Start with a significantly lower learning rate for fine-tuning (e.g., 1e-6 or even 1e-7)
+            # This makes updates smaller and helps prevent "forgetting" pre-trained weights.
+            cosine_lr = CosineDecay(initial_learning_rate=1e-6, decay_steps=decay_steps, alpha=0.1)
+
+            # Create a NEW instance of the optimizer for the fine-tuning phase.
+            # This is essential to prevent issues with the optimizer's internal state
+            # when the model's trainable parameters change.
+            # Use the legacy Adam optimizer for better compatibility on M1/M2 Macs.
+            fine_tune_optimizer = tf.keras.optimizers.legacy.Adam(learning_rate=cosine_lr)
+
+            # Recompile the model with the new optimizer (which uses the CosineDecay schedule).
+            # Recompilation is necessary for the changes in layer.trainable status to take effect.
+            model.compile(optimizer=fine_tune_optimizer,
                           loss=selected_config["loss_function"],
                           metrics=['accuracy'])
-            
+
+            # Continue training the model with the unfrozen layers and new learning rate schedule.
             history_fine = model.fit(
                 generator_train,
                 epochs=fine_tune_epochs,
-                initial_epoch=epochs, # Start fine-tuning from where initial training left off
+                initial_epoch=epochs, # Start fine-tuning from where initial training left off.
                 steps_per_epoch=steps_per_epoch,
                 validation_data=generator_test,
                 validation_steps=steps_test,
                 class_weight=class_weight,
-                # callbacks=[early_stopping] # Use only early_stopping or adjust callbacks carefully
-                # Better, no early stopping
+                # Callbacks like early_stopping can be added here if desired.
+                # However, for observing the transient, you might temporarily remove them.
             )
         else:
             class DummyHistory:
