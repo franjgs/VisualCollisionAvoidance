@@ -12,7 +12,7 @@ import pickle
 
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Flatten, Dropout, TimeDistributed, Conv2D, MaxPooling2D, Input
-from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.optimizers.legacy import Adam
 from sklearn.model_selection import train_test_split
 from sklearn.utils import class_weight
 from tensorflow.compat.v1 import ConfigProto, InteractiveSession
@@ -66,33 +66,43 @@ def load_labeled_hdf5_sequences(data_dir, sequence_length, img_height, img_width
     create_labeled_sequences_from_annotations.
 
     Args:
-        data_dir (str): Directory containing the class subdirectories ('train', 'test').
+        data_dir (str): Directory containing the 'train' and 'test' subdirectories.
         sequence_length (int): The expected length of each sequence.
         img_height (int): The expected height of each frame.
         img_width (int): The expected width of each frame.
 
     Returns:
-        tuple: (sequences, labels, class_names)
-            - sequences: NumPy array of shape (num_sequences, sequence_length, img_height, img_width, 3).
-            - labels: NumPy array of shape (num_sequences,).
+        tuple: (train_sequences, test_sequences, train_labels, test_labels, class_names)
+            - train_sequences: NumPy array of shape (num_train_sequences, sequence_length, img_height, img_width, 3).
+            - test_sequences: NumPy array of shape (num_test_sequences, sequence_length, img_height, img_width, 3).
+            - train_labels: NumPy array of shape (num_train_sequences,).
+            - test_labels: NumPy array of shape (num_test_sequences,).
             - class_names: List of class names (e.g., ['no_collision', 'collision']).
     """
-    sequences = []
-    labels = []
-    class_names = sorted([d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))])  # Get only class dirs
-    for label_idx, class_name in enumerate(class_names):
-        class_path = os.path.join(data_dir, class_name)
-        for video_dir in os.listdir(class_path):  # Iterate through video dirs (e.g., video_38)
-            video_path = os.path.join(class_path, video_dir)
-            if os.path.isdir(video_path): # Only process directories
-                h5_path = os.path.join(video_path, "data.hdf5")
+
+    train_sequences, train_labels = [], []
+    test_sequences, test_labels = [], []
+    class_names = ['no_collision', 'collision']  # Fixed based on labels (0, 1)
+
+    for split_dir in ['train', 'test']:
+        split_path = os.path.join(data_dir, split_dir)
+        if not os.path.isdir(split_path):
+            print(f"Warning: {split_path} not found or not a directory")
+            continue
+
+        for video_dir in os.listdir(split_path):
+            video_path = os.path.join(split_path, video_dir)
+            if os.path.isdir(video_path):
+                h5_path = os.path.join(video_path, f"data_seq{sequence_length}.hdf5")
             else:
-                h5_path = video_path
+                continue  # Skip if not a directory
+
             if os.path.exists(h5_path):
+                print(f"Loading data from {h5_path}")
                 try:
                     with h5py.File(h5_path, 'r') as hf:
-                        loaded_sequences = hf['sequences'][:]  # Load all sequences
-                        loaded_labels = hf['labels'][:]      # Load all labels
+                        loaded_sequences = hf['sequences'][:]
+                        loaded_labels = hf['labels'][:]
 
                     # Check the shape of the loaded sequences
                     if loaded_sequences.shape[1:] != (sequence_length, img_height, img_width, 3):
@@ -100,32 +110,48 @@ def load_labeled_hdf5_sequences(data_dir, sequence_length, img_height, img_width
                             f"Warning: Skipping data from {h5_path} due to incorrect sequence shape. Expected "
                             f"({sequence_length}, {img_height}, {img_width}, 3), got {loaded_sequences.shape[1:]}"
                         )
-                        continue  # Skip to the next video
+                        continue
 
-                    sequences.extend(loaded_sequences)
-                    labels.extend(loaded_labels)
+                    if split_dir == 'train':
+                        train_sequences.extend(loaded_sequences)
+                        train_labels.extend(loaded_labels)
+                    else:  # test
+                        test_sequences.extend(loaded_sequences)
+                        test_labels.extend(loaded_labels)
 
                 except Exception as e:
                     print(f"Error loading data from {h5_path}: {e}")
             else:
                 print(f"Warning: HDF5 file not found: {h5_path}")
 
-    return np.array(sequences), np.array(labels), class_names
+    return (
+        np.array(train_sequences) if train_sequences else np.array([]),
+        np.array(test_sequences) if test_sequences else np.array([]),
+        np.array(train_labels) if train_labels else np.array([]),
+        np.array(test_labels) if test_labels else np.array([]),
+        class_names
+    )
 
-print("Loading training data...")
-train_sequences, train_labels, class_names = load_labeled_hdf5_sequences(
-    os.path.join(DATA_DIR, 'train'), SEQUENCE_LENGTH, IMG_HEIGHT, IMG_WIDTH
-)
-
-print("Loading testing data...")
-test_sequences, test_labels, _ = load_labeled_hdf5_sequences(
-    os.path.join(DATA_DIR, 'test'), SEQUENCE_LENGTH, IMG_HEIGHT, IMG_WIDTH
+# Usage
+print("Loading data sequences...")
+train_sequences, test_sequences, train_labels, test_labels, class_names = load_labeled_hdf5_sequences(
+    DATA_DIR, SEQUENCE_LENGTH, IMG_HEIGHT, IMG_WIDTH
 )
 
 # --- Split Training Data for Validation ---
+print("Split Training Data for Validation...")
 train_sequences, val_sequences, train_labels, val_labels = train_test_split(
     train_sequences, train_labels, test_size=0.2, stratify=train_labels, random_state=42
 )
+
+# Standardize to zero mean, unit variance
+mean = np.mean(train_sequences, axis=(0, 1, 2, 3))  # Average over sequences, frames, height, width
+std = np.std(train_sequences, axis=(0, 1, 2, 3))    # Average over sequences, frames, height, width
+
+# Apply standardization
+train_sequences = (train_sequences - mean) / std
+val_sequences = (val_sequences - mean) / std
+test_sequences = (test_sequences - mean) / std
 
 # --- Calculate Class Weights ---
 class_weights = class_weight.compute_class_weight('balanced', classes=np.unique(train_labels), y=train_labels)
@@ -133,6 +159,7 @@ class_weight_dict = dict(enumerate(class_weights))
 print("Class Weights:", class_weight_dict)
 
 # --- Build Multi-Frame CNN Model ---
+print("Build Multi-Frame CNN Model...")
 def build_multiframe_cnn(sequence_length, img_height, img_width, num_classes):
     model = Sequential([
         Input(shape=(sequence_length, img_height, img_width, 3)),  # Define input shape here

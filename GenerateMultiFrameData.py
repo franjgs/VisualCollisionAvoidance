@@ -13,10 +13,10 @@ from utils.data_processing import (
 video_directory = 'videos'  # Replace with your video directory
 annotation_directory = 'dataframes' # Replace with your dataframe directory
 output_directory = 'labeled_sequences'
-sequence_length = 15
+sequence_length = 10
+stride = 5
 target_size = (224, 224)
 train_test_ratio = 0.8
-collision_temporal_window = 5
 
 train_dir, test_dir, class_names = create_labeled_sequences_from_annotations(
     video_directory,
@@ -25,7 +25,7 @@ train_dir, test_dir, class_names = create_labeled_sequences_from_annotations(
     sequence_length=sequence_length,
     target_size=target_size,
     train_test_split_ratio=train_test_ratio,
-    collision_window=collision_temporal_window
+    stride = stride
 )
 
 print(f"Training sequences saved to: {train_dir}")
