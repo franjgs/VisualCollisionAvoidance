@@ -160,7 +160,7 @@ hdf5_data_loader_tf = HDF5DataLoaderForTFData(
     expected_seq_len=SEQUENCE_LENGTH_FOR_LOADING,
     img_h=IMG_HEIGHT, img_w=IMG_WIDTH,
     model_name_for_preprocess=SELECTED_PRETRAINED_MODEL,
-    should_dataset_output_4d=SHOULD_DATASET_OUTPUT_4D # Instructs loader on output tensor shape
+    output_as_4d_if_single_frame=SHOULD_DATASET_OUTPUT_4D # Instructs loader on output tensor shape
 )
 
 def create_dataset(dataframe: pd.DataFrame, shuffle: bool = False, repeat: bool = False) -> tf.data.Dataset:
