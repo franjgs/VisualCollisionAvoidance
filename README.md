@@ -48,7 +48,7 @@ The project is structured to handle multiple datasets and differentiate between 
     -   `models/`: **(Generated Output)** Directory where trained model files (`.keras` format) specific to the 'cars' dataset are saved.
     -   `results/`: **(Generated Output)** Directory for evaluation plots (e.g., training history, confusion matrices) generated for the 'cars' dataset.
 
--   `drones/`: **Root directory for the [Drones](https://github.com/dario-pedro/uav-collision-avoidance)dataset.**
+-   `drones/`: **Root directory for the [Drones](https://github.com/dario-pedro/uav-collision-avoidance) dataset.**
     -   `videos/`: Contains the raw video files for the 'drones' dataset (e.g., `collision01.mp4`).
     -   `dataframes/`: Contains Excel annotation files (`.xlsx`) for the 'drones' dataset (e.g., `video-00001.xlsx`), providing frame-level collision annotations.
     -   `image_data_drones/`: **(Generated Output)** Directory containing processed single-frame images derived from the 'drones' dataset. This structure is created by `SingleFrameCA_DNN.py` when `DATASET_TO_USE` is set to "drones".
