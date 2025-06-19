@@ -14,6 +14,9 @@ import cv2
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+
+import math
+
 from sklearn.model_selection import train_test_split
 import h5py
 import shutil
@@ -128,7 +131,7 @@ def create_image_directories(output_base_dir: str) -> tuple[str, str]:
     os.makedirs(os.path.join(test_dir, '1'), exist_ok=True)
     return train_dir, test_dir
 
-def generate_paired_file_lists(range_min: int = 70, range_max: int = 93) -> tuple[list[str], list[str]]:
+def generate_paired_file_lists(range_min: int = 70, range_max: int = 93, base_dir=None) -> tuple[list[str], list[str]]:
     """
     Generates lists of paired video and Excel annotation file paths based on a numerical range.
     Only includes pairs where both the video and Excel files exist.
@@ -140,8 +143,8 @@ def generate_paired_file_lists(range_min: int = 70, range_max: int = 93) -> tupl
     Returns:
         tuple[list[str], list[str]]: Two lists, one for video file paths and one for Excel file paths.
     """
-    video_dir = 'videos'
-    excel_dir = 'dataframes'
+    video_dir = os.path.join(base_dir,'videos')
+    excel_dir = os.path.join(base_dir,'dataframes')
     
     video_files = [os.path.join(video_dir, f'collision{i:02d}.mp4') for i in range(range_min, range_max + 1)]
     excel_files = [os.path.join(excel_dir, f'video-{i:05d}.xlsx') for i in range(range_min, range_max + 1)]
@@ -269,6 +272,168 @@ def process_and_save_frames(excel_files: list[str], video_files: list[str], outp
 
     return filenames
 
+
+def process_and_save_frames_cars_dataset(labels_csv_path, source_videos_directory, output_dir,
+                                         target_size=(224, 224), train_ratio=0.8,
+                                         num_collision_videos_to_process=50, # Renamed
+                                         num_no_collision_videos_to_process=50, # Renamed
+                                         frames_per_second=1):
+    """Processes video frames from the cars dataset, saves them to train/test/0/1.
+    It clears and recreates output directories before processing.
+
+    Args:
+        labels_csv_path (str): Path to the CSV file containing video IDs and labels (e.g., train.csv).
+        source_videos_directory (str): The directory containing the video files to be processed.
+                                       (e.g., 'train' folder containing all source videos).
+        output_dir (str): Base directory where 'train' and 'test' folders for images will be created.
+        target_size (tuple): Target (height, width) for resizing frames.
+        train_ratio (float): Ratio of extracted frames to assign to the training set.
+        num_collision_videos_to_process (int): Number of collision videos to select from the source.
+        num_no_collision_videos_to_process (int): Number of no-collision videos to select from the source.
+        frames_per_second (int): How many frames to extract per second from the video.
+    Returns:
+        list: List of paths to the saved frame images.
+    """
+    train_dir = os.path.join(output_dir, 'train')
+    test_dir = os.path.join(output_dir, 'test')
+    
+    train_collision_dir = os.path.join(train_dir, '1')
+    train_no_collision_dir = os.path.join(train_dir, '0')
+    test_collision_dir = os.path.join(test_dir, '1')
+    test_no_collision_dir = os.path.join(test_dir, '0')
+
+    # Check if the full expected directory structure for saved frames already exists
+    all_dirs_exist = (os.path.exists(train_collision_dir) and
+                      os.path.exists(train_no_collision_dir) and
+                      os.path.exists(test_collision_dir) and
+                      os.path.exists(test_no_collision_dir))
+
+    if all_dirs_exist:
+        print(f"Output directories already exist and are complete at '{output_dir}'. Skipping frame processing.")
+        return [] # Return an empty list as no new files were processed/saved
+
+    # If the full structure is not found or incomplete, proceed to clear and recreate
+    print(f"Output directories not fully found or are incomplete at '{output_dir}'. Clearing and recreating the structure.")
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir) # Remove the entire base output directory and its contents
+        
+    create_image_directories(output_dir) # Recreate the fresh directory structure
+
+    filenames = []
+    np.random.seed(42)
+
+    try:
+        df_labels = pd.read_csv(labels_csv_path) # Changed to df_labels
+    except Exception as e:
+        print(f"Error reading labels CSV file {labels_csv_path}: {e}")
+        return []
+
+    df_labels['time_of_alert'] = pd.to_numeric(df_labels['time_of_alert'], errors='coerce')
+    df_labels['time_of_event'] = pd.to_numeric(df_labels['time_of_event'], errors='coerce')
+
+    collision_video_ids = df_labels[df_labels['target'] == 1]['id'].tolist()
+    no_collision_video_ids = df_labels[df_labels['target'] == 0]['id'].tolist()
+
+    np.random.shuffle(collision_video_ids)
+    np.random.shuffle(no_collision_video_ids)
+
+    selected_collision_ids = collision_video_ids[:num_collision_videos_to_process]
+    selected_no_collision_ids = no_collision_video_ids[:num_no_collision_videos_to_process]
+
+    all_selected_videos_to_process = selected_collision_ids + selected_no_collision_ids
+    np.random.shuffle(all_selected_videos_to_process)
+
+    print(f"Processing {len(selected_collision_ids)} collision-event videos and "
+          f"{len(selected_no_collision_ids)} no-collision-event videos from '{source_videos_directory}' for data generation...")
+
+    # --- Process Selected Videos from the SINGLE SOURCE Directory ---
+    # The 'source_videos_directory' now directly points to the folder containing videos (e.g., 'train/')
+    # So we don't need os.path.join(base_video_dir, 'train') anymore.
+    # It's just 'source_videos_directory' itself.
+
+    for video_id in tqdm(all_selected_videos_to_process, desc="Processing selected videos"):
+        video_filename = f"{video_id:05d}.mp4"
+        video_file_path = os.path.join(source_videos_directory, video_filename) # Corrected path here
+
+        if not os.path.exists(video_file_path):
+            print(f"Warning: Video file not found: {video_file_path}. Skipping.")
+            continue
+
+        video_data = df_labels[df_labels['id'] == video_id].iloc[0]
+        if video_data.empty:
+            print(f"Warning: No data found for video ID {video_id} in CSV. Skipping.")
+            continue
+
+        cap = cv2.VideoCapture(video_file_path)
+        if not cap.isOpened():
+            print(f"Error opening video file: {video_file_path}. Skipping.")
+            cap.release()
+            continue
+
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps == 0:
+            print(f"Warning: Could not get FPS for {video_file_path}. Skipping.")
+            cap.release()
+            continue
+
+        time_of_alert = video_data['time_of_alert'] if pd.notna(video_data['time_of_alert']) else -1
+        time_of_event = video_data['time_of_event'] if pd.notna(video_data['time_of_event']) else -1
+        has_collision_target = video_data['target']
+
+        frame_interval = max(1, round(fps / frames_per_second))
+        frame_idx = 0
+
+        stop_frame_idx = float('inf')
+        if has_collision_target == 1 and time_of_event != -1:
+            stop_frame_idx = math.floor(time_of_event * fps) + 1
+
+        while cap.isOpened():
+            success, frame = cap.read()
+            if not success or frame_idx >= stop_frame_idx:
+                break
+
+            current_time = frame_idx / fps
+
+            if frame_idx % frame_interval != 0:
+                frame_idx += 1
+                continue
+
+            # --- Binary Labeling Logic (0 or 1) ---
+            label = 0 # Default: No Collision
+
+            if has_collision_target == 1:
+                if time_of_alert != -1 and time_of_event != -1:
+                    if current_time >= time_of_alert and current_time <= time_of_event:
+                        label = 1
+                elif time_of_event != -1:
+                    if current_time >= time_of_event:
+                        label = 1
+                elif time_of_alert != -1:
+                    if current_time >= time_of_alert:
+                        label = 1
+
+            frame_base_name = f"{video_id:05d}-frame-{str(frame_idx + 1).zfill(5)}"
+
+            frame_resized = cv2.resize(frame, target_size)
+            frame_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
+
+            split = 'train' if np.random.rand() < train_ratio else 'test'
+            label_dir = os.path.join(output_dir, split, str(label))
+            os.makedirs(label_dir, exist_ok=True)
+            save_path = os.path.join(label_dir, f"{frame_base_name}.png")
+
+            try:
+                if cv2.imwrite(save_path, cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)):
+                    filenames.append(save_path)
+                else:
+                    print(f"Failed to save: {save_path}")
+            except Exception as e:
+                print(f"Error saving image {save_path}: {e}")
+
+            frame_idx += 1
+        cap.release()
+
+    return filenames
 
 def get_preprocessing_function(model_name: str):
     """

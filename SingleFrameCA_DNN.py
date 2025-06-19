@@ -37,7 +37,8 @@ from tensorflow.compat.v1 import ConfigProto, InteractiveSession
 from utils.data_processing import (
     create_image_directories,
     generate_paired_file_lists,
-    process_and_save_frames
+    process_and_save_frames,
+    process_and_save_frames_cars_dataset, # Use the new function
 )
 from utils.plotting_utils import (
     example_errors,
@@ -56,24 +57,83 @@ def log_memory():
     print(f"Memory Usage: {mem_info.rss / 1024**2:.2f} MB")
     
     
-# --- Define Model Choice ---
-MODEL_LIST = [ "VGG16", "ResNet50", "EfficientNet", "MobileNetV2", "EfficientNetB0"] # "ResNet50" # Options: "VGG16", "MobileNetV2", "MobileNetV3Small", "EfficientNet",
+# --- Main Configuration Section ---
+# Choose which dataset to use: "drone" or "cars"
+DATASET_TO_USE = "drones" # "cars" # <--- IMPORTANT: Change this to "drones" or "cars" as needed
 
-# --- Main Script ---
+# --- Common Setup (applies to both datasets) ---
+MODEL_LIST = ["VGG16", "ResNet50", "EfficientNet", "MobileNetV2", "EfficientNetB0"]
+MODEL_LIST = ["VGG16"]
+
+output_base_dir_for_images = os.path.join(DATASET_TO_USE,f'image_data_{DATASET_TO_USE}')
+output_dir_for_models = os.path.join(DATASET_TO_USE,"models")
+os.makedirs(output_dir_for_models, exist_ok=True)
+output_dir_for_results = os.path.join(DATASET_TO_USE,"results")
+os.makedirs(output_dir_for_results, exist_ok=True)
+
 # Setup directories
-output_base_dir = 'image_data'
-train_dir = os.path.join(output_base_dir, 'train')
-test_dir = os.path.join(output_base_dir, 'test')
-output_dir = "models"  # Output directory for models and plots
-os.makedirs(output_dir, exist_ok=True)  # Create directory if it doesn't exist
+train_dir = os.path.join(output_base_dir_for_images, 'train')
+test_dir = os.path.join(output_base_dir_for_images, 'test')
 
-# Load and process data
+
+TARGET_IMAGE_SIZE = (224, 224)
+TRAIN_VALIDATION_SPLIT_RATIO = 0.8
+
+
+# --- Dataset-Specific Configuration and Processing Logic ---
+print(f"--- Processing data for the '{DATASET_TO_USE}' dataset ---")
 log_memory()
-video_files, excel_files = generate_paired_file_lists(range_min=1, range_max=93)
-all_filenames = process_and_save_frames(
-    excel_files, video_files, output_base_dir, target_size=(224, 224)
-)
+
+all_filenames = [] # Initialize all_filenames here
+
+if DATASET_TO_USE == "drones":
+    print("Configuring for Drone Collision Dataset...")
+    # Drone dataset specific parameters
+    DRONE_RANGE_MIN = 1
+    DRONE_RANGE_MAX = 93
+    # Removed DRONE_FRAMES_PER_SECOND as process_and_save_frames does not use it.
+    # The Excel files define which frames are processed.
+
+    # Load and process drone data
+    video_files, excel_files = generate_paired_file_lists(
+        range_min=DRONE_RANGE_MIN, range_max=DRONE_RANGE_MAX,
+        base_dir = f'{DATASET_TO_USE}'
+    )
+    all_filenames = process_and_save_frames(
+        excel_files,
+        video_files,
+        output_base_dir_for_images,
+        target_size=TARGET_IMAGE_SIZE,
+        train_ratio=TRAIN_VALIDATION_SPLIT_RATIO # Pass train_ratio explicitly
+    )
+
+
+elif DATASET_TO_USE == "cars":
+    print("Configuring for Car Crashes Dataset...")
+    # Car crashes dataset specific parameters
+    CAR_LABELS_CSV_FILE = os.path.join(DATASET_TO_USE,'data_labels.csv')
+    CAR_SOURCE_VIDEOS_DIRECTORY = os.path.join(DATASET_TO_USE,'videos') # Points to the folder containing car videos
+    CAR_FRAMES_PER_SECOND = 15 # Orginally, 30 fps
+    CAR_NUM_COLLISION_VIDEOS = 25
+    CAR_NUM_NO_COLLISION_VIDEOS = 15
+
+    # Call the updated function for car crashes dataset
+    all_filenames = process_and_save_frames_cars_dataset(
+        CAR_LABELS_CSV_FILE,
+        CAR_SOURCE_VIDEOS_DIRECTORY,
+        output_base_dir_for_images,
+        target_size=TARGET_IMAGE_SIZE,
+        train_ratio=TRAIN_VALIDATION_SPLIT_RATIO,
+        num_collision_videos_to_process=CAR_NUM_COLLISION_VIDEOS,
+        num_no_collision_videos_to_process=CAR_NUM_NO_COLLISION_VIDEOS,
+        frames_per_second=CAR_FRAMES_PER_SECOND
+    )
+
+else:
+    raise ValueError(f"Unknown DATASET_TO_USE: {DATASET_TO_USE}. Please choose 'drone' or 'cars'.")
+
 log_memory()
+print(f"Finished data processing for {DATASET_TO_USE} dataset. Total frames saved: {len(all_filenames)}")
 
 # --- Data Generators ---
 batch_size = 20 # 8 # 20
@@ -247,7 +307,7 @@ for MODEL_NAME in MODEL_LIST:
                 
             # Use the legacy Adam optimizer for M1/M2 Mac compatibility
             # Always create a NEW optimizer instance when recompiling after changing trainable status
-            fine_tune_optimizer = tf.keras.optimizers.legacy.Adam(learning_rate=2e-8)
+            fine_tune_optimizer = tf.keras.optimizers.Adam(learning_rate=2e-8)
         
             model.compile(optimizer=fine_tune_optimizer,
                           loss=selected_config["loss_function"],
@@ -270,7 +330,7 @@ for MODEL_NAME in MODEL_LIST:
                 layer.trainable = 'block16' in layer.name or 'Conv_1' in layer.name
                 
             # Always create a NEW optimizer instance when recompiling after changing trainable status
-            fine_tune_optimizer = tf.keras.optimizers.legacy.Adam(learning_rate=1e-6)
+            fine_tune_optimizer = tf.keras.optimizers.Adam(learning_rate=1e-6)
         
             model.compile(optimizer=fine_tune_optimizer,
                           loss=selected_config["loss_function"],
@@ -321,7 +381,7 @@ for MODEL_NAME in MODEL_LIST:
             # This is essential to prevent issues with the optimizer's internal state
             # when the model's trainable parameters change.
             # Use the legacy Adam optimizer for better compatibility on M1/M2 Macs.
-            fine_tune_optimizer = tf.keras.optimizers.legacy.Adam(learning_rate=cosine_lr)
+            fine_tune_optimizer = tf.keras.optimizers.Adam(learning_rate=cosine_lr)
 
             # Recompile the model with the new optimizer (which uses the CosineDecay schedule).
             # Recompilation is necessary for the changes in layer.trainable status to take effect.
@@ -371,22 +431,22 @@ for MODEL_NAME in MODEL_LIST:
         
         cls_true = generator_test.classes
         # Pass output_dir and MODEL_NAME to example_errors
-        example_errors(cls_true, cls_pred, generator_test, class_names, output_dir=output_dir, model_name=MODEL_NAME)
+        example_errors(cls_true, cls_pred, generator_test, class_names, output_dir=output_dir_for_results, model_name=MODEL_NAME)
         # --- Save Results ---
         timestamp = int(time.time())
         name = f"{MODEL_NAME}_collision_avoidance_{timestamp}"
         if any(history_fine.history):
-            fig = plot_training_history(history, MODEL_NAME, history_fine, save_path=f"{output_dir}/{name}.pdf")
+            fig = plot_training_history(history, MODEL_NAME, history_fine, save_path=f"{output_dir_for_results}/{name}.pdf")
         elif any(history.history):
-            fig = plot_training_history(history, MODEL_NAME, None, save_path=f"{output_dir}/{name}.pdf")
+            fig = plot_training_history(history, MODEL_NAME, None, save_path=f"{output_dir_for_results}/{name}.pdf")
         plt.show()
         
-        model.save(f"{output_dir}/{name}.keras")
+        model.save(f"{output_dir_for_models}/{name}.keras")
         if any(history_fine.history):
-            with open(f"{output_dir}/{MODEL_NAME}_trainHistoryDict_fine_{timestamp}.pkl", 'wb') as f:
+            with open(f"{output_dir_for_models}/{MODEL_NAME}_trainHistoryDict_fine_{timestamp}.pkl", 'wb') as f:
                 pickle.dump(history_fine.history, f)
         elif any(history.history):
-            with open(f"{output_dir}/{MODEL_NAME}_trainHistoryDict_{timestamp}.pkl", 'wb') as f:
+            with open(f"{output_dir_for_models}/{MODEL_NAME}_trainHistoryDict_{timestamp}.pkl", 'wb') as f:
                 pickle.dump(history.history, f)
 
     # --- Clear memory --- 
