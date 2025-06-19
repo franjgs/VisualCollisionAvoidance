@@ -41,27 +41,17 @@ The project is structured to handle multiple datasets and differentiate between 
     -   `data_processing.py`: Core functions for video processing, including frame/sequence extraction, image preprocessing, and efficient data loading for TensorFlow datasets from various annotation formats (Excel, CSV).
     -   `plotting_utils.py`: Provides helper functions for visualizing model training history (e.g., loss/accuracy curves) and evaluating performance metrics (e.g., confusion matrices).
 
--   `cars/`: **Root directory for the "Cars" (Kaggle Nexar Collision Prediction) dataset.**
+-   `cars/`: **Root directory for the "Cars" ([Kaggle Nexar Collision Prediction](https://www.kaggle.com/competitions/nexar-collision-prediction/data)) dataset.**
     -   `videos/`: Contains the raw video files for the 'cars' dataset, typically organized into `train/` and `test/` subfolders with `.mp4` files (e.g., `00058.mp4`).
     -   `data_labels.csv`: The primary annotation file for the 'cars' dataset, specifying event and alert times for collisions.
     -   `image_data_cars/`: **(Generated Output)** Directory containing processed single-frame images derived from the 'cars' dataset. This structure is created by `SingleFrameCA_DNN.py` when `DATASET_TO_USE` is set to "cars".
-        -   `train/`: Holds `0/` (no collision frames) and `1/` (collision frames) subfolders for training.
-        -   `test/`: Holds `0/` (no collision frames) and `1/` (collision frames) subfolders for testing.
-    -   `labeled_sequences_len_X_stride_Y/`: **(Generated Output)** Directory containing processed multi-frame sequences in HDF5 format, specifically for the 'cars' dataset. This is created by `GenerateMultiFrameData.py` (where `X` and `Y` denote `sequence_length` and `stride` used during generation) and consumed by `MultiFrameCA_DNN.py`.
-        -   `train/`: Contains `0/` and `1/` subfolders with HDF5 files for training sequences.
-        -   `test/`: Contains `0/` and `1/` subfolders with HDF5 files for testing sequences.
     -   `models/`: **(Generated Output)** Directory where trained model files (`.keras` format) specific to the 'cars' dataset are saved.
     -   `results/`: **(Generated Output)** Directory for evaluation plots (e.g., training history, confusion matrices) generated for the 'cars' dataset.
 
--   `drones/`: **Root directory for the "Drones" dataset.**
+-   `drones/`: **Root directory for the [Drones](https://github.com/dario-pedro/uav-collision-avoidance)dataset.**
     -   `videos/`: Contains the raw video files for the 'drones' dataset (e.g., `collision01.mp4`).
     -   `dataframes/`: Contains Excel annotation files (`.xlsx`) for the 'drones' dataset (e.g., `video-00001.xlsx`), providing frame-level collision annotations.
     -   `image_data_drones/`: **(Generated Output)** Directory containing processed single-frame images derived from the 'drones' dataset. This structure is created by `SingleFrameCA_DNN.py` when `DATASET_TO_USE` is set to "drones".
-        -   `train/`: Holds `0/` (no collision frames) and `1/` (collision frames) subfolders for training.
-        -   `test/`: Holds `0/` (no collision frames) and `1/` (collision frames) subfolders for testing.
-    -   `labeled_sequences_len_X_stride_Y/`: **(Generated Output)** Directory containing processed multi-frame sequences in HDF5 format, specifically for the 'drones' dataset. This is created by `GenerateMultiFrameData.py` and consumed by `MultiFrameCA_DNN.py`.
-        -   `train/`: Contains `0/` and `1/` subfolders with HDF5 files for training sequences.
-        -   `test/`: Contains `0/` and `1/` subfolders with HDF5 files for testing sequences.
     -   `models/`: **(Generated Output)** Directory where trained model files (`.keras` format) specific to the 'drones' dataset are saved.
     -   `results/`: **(Generated Output)** Directory for evaluation plots (e.g., training history, confusion matrices) generated for the 'drones' dataset.
 
