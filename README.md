@@ -31,19 +31,43 @@ Autonomous navigation in dynamic environments requires robust collision avoidanc
 
 ## Repository Structure
 
--   `SingleFrameCA_DNN.py`: Script for training and evaluating a single-frame collision avoidance DNN.
--   `MultiFrameCA_DNN.py`: Script for training and evaluating a multi-frame collision avoidance DNN (CNN-LSTM).
--   `GenerateMultiFrameData.py`: Script for generating multi-frame sequences from video and annotation data.
--   `utils/`: Contains utility scripts:
-    -   `data_processing.py`: Handles frame extraction, preprocessing, and saving from video and Excel files.
-    -   `plotting_utils.py`: Provides functions for visualizing training history and evaluation metrics.
--   `dataframes/`: Excel files (e.g., `video-00001.xlsx`) with frame-level collision annotations.
--   `videos/`: Video files (e.g., `collision01.mp4`) for frame extraction.
--   `labeled_sequences/`: Directory (created by `GenerateMultiFrameData.py`) containing processed multi-frame sequences in HDF5 files.
--   `models/`: Saved models, training history, and plots (automatically created if missing).
--   `requirements.txt`: Lists required Python packages with versions.
--   `.gitignore`: Excludes temporary files, macOS metadata (e.g., `.DS_Store`), and large directories.
--   `LICENSE`: MIT License with citation requirement.
+The project is structured to handle multiple datasets and differentiate between single-frame and multi-frame processing outputs.
+
+-   `SingleFrameCA_DNN.py`: Main script for training and evaluating a single-frame collision avoidance Deep Neural Network. This script is configurable to work with either the "Drones" or "Cars" dataset.
+-   `MultiFrameCA_DNN.py`: Main script for training and evaluating a multi-frame collision avoidance Deep Neural Network (CNN-LSTM). This script is also configurable for different datasets.
+-   `GenerateMultiFrameData.py`: Dedicated script for generating multi-frame sequences in HDF5 format from raw video and annotation data, specifically for multi-frame model training.
+
+-   `utils/`: Contains essential utility scripts:
+    -   `data_processing.py`: Core functions for video processing, including frame/sequence extraction, image preprocessing, and efficient data loading for TensorFlow datasets from various annotation formats (Excel, CSV).
+    -   `plotting_utils.py`: Provides helper functions for visualizing model training history (e.g., loss/accuracy curves) and evaluating performance metrics (e.g., confusion matrices).
+
+-   `cars/`: **Root directory for the "Cars" (Kaggle Nexar Collision Prediction) dataset.**
+    -   `videos/`: Contains the raw video files for the 'cars' dataset, typically organized into `train/` and `test/` subfolders with `.mp4` files (e.g., `00058.mp4`).
+    -   `data_labels.csv`: The primary annotation file for the 'cars' dataset, specifying event and alert times for collisions.
+    -   `image_data_cars/`: **(Generated Output)** Directory containing processed single-frame images derived from the 'cars' dataset. This structure is created by `SingleFrameCA_DNN.py` when `DATASET_TO_USE` is set to "cars".
+        -   `train/`: Holds `0/` (no collision frames) and `1/` (collision frames) subfolders for training.
+        -   `test/`: Holds `0/` (no collision frames) and `1/` (collision frames) subfolders for testing.
+    -   `labeled_sequences_len_X_stride_Y/`: **(Generated Output)** Directory containing processed multi-frame sequences in HDF5 format, specifically for the 'cars' dataset. This is created by `GenerateMultiFrameData.py` (where `X` and `Y` denote `sequence_length` and `stride` used during generation) and consumed by `MultiFrameCA_DNN.py`.
+        -   `train/`: Contains `0/` and `1/` subfolders with HDF5 files for training sequences.
+        -   `test/`: Contains `0/` and `1/` subfolders with HDF5 files for testing sequences.
+    -   `models/`: **(Generated Output)** Directory where trained model files (`.keras` format) specific to the 'cars' dataset are saved.
+    -   `results/`: **(Generated Output)** Directory for evaluation plots (e.g., training history, confusion matrices) generated for the 'cars' dataset.
+
+-   `drones/`: **Root directory for the "Drones" dataset.**
+    -   `videos/`: Contains the raw video files for the 'drones' dataset (e.g., `collision01.mp4`).
+    -   `dataframes/`: Contains Excel annotation files (`.xlsx`) for the 'drones' dataset (e.g., `video-00001.xlsx`), providing frame-level collision annotations.
+    -   `image_data_drones/`: **(Generated Output)** Directory containing processed single-frame images derived from the 'drones' dataset. This structure is created by `SingleFrameCA_DNN.py` when `DATASET_TO_USE` is set to "drones".
+        -   `train/`: Holds `0/` (no collision frames) and `1/` (collision frames) subfolders for training.
+        -   `test/`: Holds `0/` (no collision frames) and `1/` (collision frames) subfolders for testing.
+    -   `labeled_sequences_len_X_stride_Y/`: **(Generated Output)** Directory containing processed multi-frame sequences in HDF5 format, specifically for the 'drones' dataset. This is created by `GenerateMultiFrameData.py` and consumed by `MultiFrameCA_DNN.py`.
+        -   `train/`: Contains `0/` and `1/` subfolders with HDF5 files for training sequences.
+        -   `test/`: Contains `0/` and `1/` subfolders with HDF5 files for testing sequences.
+    -   `models/`: **(Generated Output)** Directory where trained model files (`.keras` format) specific to the 'drones' dataset are saved.
+    -   `results/`: **(Generated Output)** Directory for evaluation plots (e.g., training history, confusion matrices) generated for the 'drones' dataset.
+
+-   `requirements.txt`: Lists all required Python packages and their versions to set up the development environment.
+-   `.gitignore`: Specifies intentionally untracked files that Git should ignore (e.g., temporary files, large generated data, system files).
+-   `LICENSE`: Details the licensing terms for the project, which is the MIT License with a citation requirement.
 
 ## Installation
 
