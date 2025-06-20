@@ -70,7 +70,7 @@ MODEL_LIST = ["VGG16", "ResNet50", "EfficientNet", "MobileNetV2", "EfficientNetB
 # MODEL_LIST = ["VGG16"]
 
 output_base_dir_for_images = os.path.join(DATASET_TO_USE,f'image_data_{DATASET_TO_USE}')
-output_dir_for_models = os.path.join(DATASET_TO_USE,"models")
+output_dir_for_models = os.path.join(DATASET_TO_USE,"models_singleframe")
 os.makedirs(output_dir_for_models, exist_ok=True)
 output_dir_for_results = os.path.join(DATASET_TO_USE,"results")
 os.makedirs(output_dir_for_results, exist_ok=True)
