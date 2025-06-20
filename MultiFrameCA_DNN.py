@@ -87,7 +87,7 @@ STRIDE = 1          # Example: 1 for single-frame, 3 or 5 for multi-frame
 SF_PRETRAINED_MODEL = 'ResNet50' # Pretrained backbone for single-frame model
 SF_N_HIDDEN_DENSE = 1024 # Number of units in the hidden dense layer for single-frame CNN
 
-MF_PRETRAINED_MODEL = 'MobileNetV2' # 'ResNet50' # Pretrained backbone for multi-frame model
+MF_PRETRAINED_MODEL = 'VGG16' # 'MobileNetV2' # 'ResNet50' # Pretrained backbone for multi-frame model
 MF_N_DENSE_BOTTLENECK = 256 # Units in TimeDistributed Dense bottleneck before LSTM
 MF_N_HIDDEN_LSTM = 128 # Units in the LSTM layer
 
@@ -309,7 +309,7 @@ def build_multiframe_pretrained_cnn_lstm_simplified(
 
 # --- Build Model (Dynamically selects and builds the model based on MODEL_TYPE) ---
 print(f"Building {MODEL_TYPE} model: {MODEL_NAME}...")
-if MODEL_TYPE == 'single_frame':
+if MODEL_TYPE == 'Singleframe':
     model = build_singleframe_pretrained_cnn(
         img_height=IMG_HEIGHT,
         img_width=IMG_WIDTH,
@@ -317,7 +317,7 @@ if MODEL_TYPE == 'single_frame':
         n_hidden_dense=SF_N_HIDDEN_DENSE,
         model_output_config=CURRENT_MODEL_OUTPUT_CONFIG
     )
-elif MODEL_TYPE == 'multi_frame':
+elif MODEL_TYPE == 'Multiframe':
     model = build_multiframe_pretrained_cnn_lstm_simplified(
         sequence_length=SEQUENCE_LENGTH_FOR_LOADING, # Uses the sequence length dynamically set for data loading
         img_height=IMG_HEIGHT,
@@ -329,7 +329,7 @@ elif MODEL_TYPE == 'multi_frame':
         n_hidden_single_frame_dense=SF_N_HIDDEN_DENSE # Passed for the sequence_length=1 case within multi-frame
     )
 else:
-    raise ValueError("MODEL_TYPE must be 'single_frame' or 'multi_frame'.")
+    raise ValueError("MODEL_TYPE must be 'Singleframe' or 'Multiframe'.")
 
 # Compile the model with the chosen optimizer, loss function, and metrics
 model.compile(
