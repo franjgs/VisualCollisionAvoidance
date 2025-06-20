@@ -10,6 +10,9 @@ Created on Mon May 19 16:30:54 2025
 import os
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+
+
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Input, Flatten, Dense, Dropout, TimeDistributed, LSTM, Reshape
@@ -33,7 +36,7 @@ from utils.data_processing import (
     HDF5DataLoaderForTFData,
     get_preprocessing_function,
 )
-from utils.plotting_utils import plot_single_history, example_errors
+from utils.plotting_utils import plot_training_history, example_errors
 
 
 # Clear Keras session to reset any previous model states
@@ -61,10 +64,10 @@ model_configs = {
 }
 
 # --- USER CONFIGURATION ---
-DATASET_TYPE = 'cars' # 'drones' # 
+DATASET_TYPE = 'drones' # 'cars' # 
 
 # Set this to 'single_frame' for a CNN model or 'multi_frame' for a CNN-LSTM model.
-MODEL_TYPE = 'multi_frame' # Options: 'single_frame', 'multi_frame'
+MODEL_TYPE = 'Multiframe' # Options: 'Singleframe', 'Multiframe'
 
 # Common Parameters for data and training
 IMG_HEIGHT = 224
@@ -84,7 +87,7 @@ STRIDE = 1          # Example: 1 for single-frame, 3 or 5 for multi-frame
 SF_PRETRAINED_MODEL = 'ResNet50' # Pretrained backbone for single-frame model
 SF_N_HIDDEN_DENSE = 1024 # Number of units in the hidden dense layer for single-frame CNN
 
-MF_PRETRAINED_MODEL = 'ResNet50' # Pretrained backbone for multi-frame model
+MF_PRETRAINED_MODEL = 'MobileNetV2' # 'ResNet50' # Pretrained backbone for multi-frame model
 MF_N_DENSE_BOTTLENECK = 256 # Units in TimeDistributed Dense bottleneck before LSTM
 MF_N_HIDDEN_LSTM = 128 # Units in the LSTM layer
 
@@ -98,25 +101,25 @@ DATA_DIR_FOR_LOADING = os.path.join(DATASET_TYPE, f'labeled_sequences_len_{SEQUE
 
 # --- DYNAMIC PARAMETER SETUP BASED ON MODEL_TYPE ---
 # Configures model-specific settings and data loader behavior based on the chosen MODEL_TYPE.
-if MODEL_TYPE == 'single_frame':
+if MODEL_TYPE == 'Singleframe':
     # For single-frame models, the dataset will always load individual frames (sequence length 1).
     SEQUENCE_LENGTH_FOR_LOADING = SEQUENCE_LENGTH # Will typically be 1
     STRIDE_FOR_LOADING = STRIDE                   # Will typically be 1
     
     SELECTED_PRETRAINED_MODEL = SF_PRETRAINED_MODEL
     CURRENT_MODEL_OUTPUT_CONFIG = model_configs['binary_sigmoid'] # Single-frame uses sigmoid output
-    OUTPUT_DIR = os.path.join(DATASET_TYPE,'models_singleframe_tfdata') # Output directory for saved models and plots
+    OUTPUT_DIR = os.path.join(DATASET_TYPE,'models_SF_tfdata') # Output directory for saved models and plots
     MODEL_NAME = f'CNN_Singleframe_{SELECTED_PRETRAINED_MODEL}_len_{SEQUENCE_LENGTH}_stride_{STRIDE}_TFData'
     SHOULD_DATASET_OUTPUT_4D = True # Dataset will output (H,W,C) for this model type
 
-elif MODEL_TYPE == 'multi_frame':
+elif MODEL_TYPE == 'Multiframe':
     # For multi-frame models, the dataset will load sequences of frames.
     SEQUENCE_LENGTH_FOR_LOADING = SEQUENCE_LENGTH # Uses the global SEQUENCE_LENGTH for sequence definition
     STRIDE_FOR_LOADING = STRIDE                   # Uses the global STRIDE for sequence definition
     
     SELECTED_PRETRAINED_MODEL = MF_PRETRAINED_MODEL
     CURRENT_MODEL_OUTPUT_CONFIG = model_configs['multiclass_softmax'] # Multi-frame uses softmax output
-    OUTPUT_DIR = os.path.join(DATASET_TYPE,'models_multiframe_tfdata') # Output directory for saved models and plots
+    OUTPUT_DIR = os.path.join(DATASET_TYPE,'models_MF_tfdata') # Output directory for saved models and plots
     MODEL_NAME = f'CNN_Multiframe_{SELECTED_PRETRAINED_MODEL}_len_{SEQUENCE_LENGTH}_stride_{STRIDE}_TFData'
     SHOULD_DATASET_OUTPUT_4D = False # Dataset will output (SeqLen,H,W,C) for this model type
 
@@ -413,22 +416,23 @@ if len(cls_true) != len(test_predictions_prob):
     cls_true = cls_true[:len(test_predictions_prob)]
 
 # --- Call example_errors to get Confusion Matrix and Metrics ---
+model_name_results = f'{MODEL_TYPE}_{SELECTED_PRETRAINED_MODEL}_len_{SEQUENCE_LENGTH}_stride_{STRIDE}'
 # This function generates and saves the confusion matrix and classification report.
 example_errors(cls_true=cls_true,
                cls_pred=test_predicted_classes,
                generator_test=None, # Not applicable for visualizing individual images from tf.data.Dataset
                class_names=class_names,
                output_dir=OUTPUT_DIR,
-               model_name=MODEL_NAME)
+               model_name=model_name_results)
 
 
 # --- Plot Training History ---
-plot_single_history(history, save_path=os.path.join(OUTPUT_DIR, f'{MODEL_NAME}_history.png'))
-
+fig = plot_training_history(history, model_name_results, None, save_path=os.path.join(OUTPUT_DIR,f"{model_name_results}.pdf"))
+plt.show()
 # --- Save the Model and Class Names ---
 print(f"\nSaving {MODEL_TYPE} model...")
-model.save(os.path.join(OUTPUT_DIR, f'{MODEL_NAME}.keras'))
-with open(os.path.join(OUTPUT_DIR, f'{MODEL_NAME}_classes.pkl'), 'wb') as f:
+model.save(os.path.join(OUTPUT_DIR, f'{model_name_results}.keras'))
+with open(os.path.join(OUTPUT_DIR, f'{model_name_results}_classes.pkl'), 'wb') as f:
     pickle.dump(class_names, f)
 print(f"Model and class names saved to {OUTPUT_DIR}")
 

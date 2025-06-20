@@ -199,85 +199,88 @@ def example_errors(cls_true, cls_pred, generator_test, class_names, output_dir=N
                           bal_acc=bal_acc, pfa=pFA, pd=pD,
                           save_path=cm_save_path)
 
-def plot_training_history(history, model_name, history_fine=None, save_path=None):
-    """Plots training and validation accuracy and loss, including fine-tuning if provided,
-       and includes the model name in the plot title and/or filename.
+def plot_training_history(history, model_name=None, history_fine=None, save_path=None):
+    """
+    Plots training and validation accuracy and loss, optionally including a fine-tuning phase.
+    The model name is included in the plot titles and filename if provided.
 
     Args:
-        history: The History object returned by model.fit().
-        model_name (str): The name of the model.
-        history_fine: Optional History object for fine-tuning.
-        save_path (str): Path to save the plot.
+        history: The History object returned by model.fit() for the initial training phase.
+        model_name (str, optional): The name of the model to include in plot titles and filename. Defaults to None.
+        history_fine: Optional History object for a subsequent fine-tuning phase. Defaults to None.
+        save_path (str, optional): Base path (including filename without extension) to save the plot.
+                                   The model name and '.pdf' extension will be added automatically.
+                                   Defaults to None (plot not saved).
     """
+    # Extract initial training history
     acc = history.history['accuracy']
     val_acc = history.history['val_accuracy']
     loss = history.history['loss']
     val_loss = history.history['val_loss']
     epochs_initial = len(acc)
 
+    # Append fine-tuning history if provided
     if history_fine:
-        acc_fine = history_fine.history['accuracy']
-        val_acc_fine = history_fine.history['val_accuracy']
-        loss_fine = history_fine.history['loss']
-        val_loss_fine = history_fine.history['val_loss']
-        total_epochs = epochs_initial + len(acc_fine)
-        acc = acc + acc_fine
-        val_acc = val_acc + val_acc_fine
-        loss = loss + loss_fine
-        val_loss = val_loss + val_loss_fine
-    else:
-        total_epochs = epochs_initial
+        acc.extend(history_fine.history['accuracy'])
+        val_acc.extend(history_fine.history['val_accuracy'])
+        loss.extend(history_fine.history['loss'])
+        val_loss.extend(history_fine.history['val_loss'])
+    
+    total_epochs = len(acc)
+    epochs_range = range(1, total_epochs + 1) # Start epochs from 1 for better readability
 
     fig = plt.figure(figsize=(12, 5))
-    plt.subplot(1, 2, 1)
-    plt.plot(range(total_epochs), acc, label='Training Accuracy')
-    plt.plot(range(total_epochs), val_acc, label='Validation Accuracy')
-    if history_fine:
-        plt.axvline(x=epochs_initial - 0.5, linestyle='--', label='Start Fine-Tuning')
-    plt.legend()
-    if model_name:
-        plt.title(f'{model_name} Accuracy')  # Include model name in title
-    else:
-        plt.title('Accuracy')
-        
-    plt.subplot(1, 2, 2)
-    plt.plot(range(total_epochs), loss, label='Training Loss')
-    plt.plot(range(total_epochs), val_loss, label='Validation Loss')
-    if history_fine:
-        plt.axvline(x=epochs_initial - 0.5, linestyle='--', label='Start Fine-Tuning')
-    plt.legend()
-    if model_name:
-        plt.title(f'{model_name} Loss')  # Include model name in title
-    else:
-        plt.title('Loss')
-        
-    if save_path:
-        fig.savefig(save_path, bbox_inches='tight', format='pdf')
-        print(f"Saved plot to {save_path}")
 
+    # Plot Accuracy
+    plt.subplot(1, 2, 1)
+    plt.plot(epochs_range, acc, 'b', label='Training Accuracy') # Explicitly blue
+    plt.plot(epochs_range, val_acc, 'r', label='Validation Accuracy') # Explicitly red
+    if history_fine:
+        # Mark the start of fine-tuning phase
+        plt.axvline(x=epochs_initial, linestyle='--', color='gray', label='Start Fine-Tuning')
+    plt.xlabel('Epoch') # Add X-axis label
+    plt.ylabel('Accuracy') # Add Y-axis label
+    plt.legend()
+    if model_name:
+        plt.title(f'{model_name} - Training and Validation Accuracy') # Include model name in title
+    else:
+        plt.title('Training and Validation Accuracy')
+
+    # Plot Loss
+    plt.subplot(1, 2, 2)
+    plt.plot(epochs_range, loss, 'b', label='Training Loss') # Explicitly blue
+    plt.plot(epochs_range, val_loss, 'r', label='Validation Loss') # Explicitly red
+    if history_fine:
+        # Mark the start of fine-tuning phase
+        plt.axvline(x=epochs_initial, linestyle='--', color='gray', label='Start Fine-Tuning')
+    plt.xlabel('Epoch') # Add X-axis label
+    plt.ylabel('Loss') # Add Y-axis label
+    plt.legend()
+    if model_name:
+        plt.title(f'{model_name} - Training and Validation Loss') # Include model name in title
+    else:
+        plt.title('Training and Validation Loss')
+    
+    plt.tight_layout() # Adjust layout to prevent overlapping titles/labels
+
+    # Save the plot if save_path is provided
+    if save_path:
+        # Ensure directory exists
+        output_dir = os.path.dirname(save_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+
+        # Construct filename with model_name and .pdf extension
+        base_filename = os.path.basename(save_path)
+        filename_without_ext = os.path.splitext(base_filename)[0]
+        
+        if model_name:
+            final_save_path = os.path.join(output_dir, f"{filename_without_ext}_{model_name}.pdf")
+        else:
+            final_save_path = os.path.join(output_dir, f"{filename_without_ext}.pdf")
+        
+        fig.savefig(final_save_path, bbox_inches='tight', format='pdf')
+        print(f"Plot saved to: {final_save_path}")
+
+    # Return the figure object; it's up to the caller to show it if needed (plt.show())
     return fig
-
-# --- Plot Training History ---
-def plot_single_history(history, save_path=None):
-    acc = history.history['accuracy']
-    val_acc = history.history['val_accuracy']
-    loss = history.history['loss']
-    val_loss = history.history['val_loss']
-    epochs = range(1, len(acc) + 1)
-
-    plt.figure(figsize=(12, 5))
-    plt.subplot(1, 2, 1)
-    plt.plot(epochs, acc, 'b', label='Training accuracy')
-    plt.plot(epochs, val_acc, 'r', label='Validation accuracy')
-    plt.title('Training and validation accuracy')
-    plt.legend()
-
-    plt.subplot(1, 2, 2)
-    plt.plot(epochs, loss, 'b', label='Training loss')
-    plt.plot(epochs, val_loss, 'r', label='Validation loss')
-    plt.title('Training and validation loss')
-    plt.legend()
-
-    if save_path:
-        plt.savefig(save_path)
-    plt.show()
