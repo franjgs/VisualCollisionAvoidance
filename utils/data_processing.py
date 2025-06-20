@@ -673,28 +673,49 @@ def load_labeled_hdf5_sequence_filepaths(data_dir: str) -> tuple[pd.DataFrame, p
 
     return train_df, test_df, class_names
 
-def create_labeled_sequences_from_annotations(video_dir: str, annotation_dir: str, output_dir: str, 
-                                            sequence_length: int = 10, target_size: tuple[int, int] = (224, 224), 
-                                            train_test_split_ratio: float = 0.8, stride: int = 1):
+def create_labeled_sequences_from_annotations(
+    dataset_type: str,
+    base_dataset_dir: str, # e.g., 'drones', 'cars'
+    output_dir: str, 
+    sequence_length: int = 10, 
+    target_size: tuple[int, int] = (224, 224), 
+    train_test_split_ratio: float = 0.8, 
+    stride: int = 1,
+    num_collision_videos_to_process: int = 0, 
+    num_no_collision_videos_to_process: int = 0
+) -> tuple[str, str, list[str]]:
     """
     Processes video files and their corresponding annotations to create labeled sequences of frames.
+    This function is flexible to handle both 'drones' (Excel annotations) and 'cars' (CSV annotations) datasets.
     Each extracted sequence is saved as an individual HDF5 file. The sequences are then
     split into training and testing sets, ensuring stratification by collision label.
     
+    For 'cars' dataset videos with a collision target, frame extraction for sequences
+    will stop at or near the `time_of_event` to focus on the pre-collision context.
+    
     Args:
-        video_dir (str): Directory containing the .mp4 video files (e.g., 'videos/').
-        annotation_dir (str): Directory containing the Excel (.xlsx) annotation files (e.g., 'dataframes/').
+        dataset_type (str): Specifies the dataset to process ('drones' or 'cars').
+        base_dataset_dir (str): The root directory for the specific dataset (e.g., './drones' or './cars').
+                                 Expected sub-structure depends on `dataset_type`.
         output_dir (str): The base directory where the processed HDF5 sequences will be saved.
                           A subdirectory structure like `output_dir/train/0/`, `output_dir/test/1/`
                           will be created to organize the HDF5 files.
         sequence_length (int): The number of consecutive frames to include in each sequence.
         target_size (tuple[int, int]): A tuple `(width, height)` specifying the desired dimensions
-                             to resize each frame to.
+                                       to resize each frame to.
         train_test_split_ratio (float): The proportion of sequences to allocate to the
                                         training set (a value between 0.0 and 1.0).
         stride (int): The step size in frames for the sliding window that extracts sequences.
                       A stride of 1 means every possible sequence is extracted.
                       A stride equal to `sequence_length` means non-overlapping sequences.
+        num_collision_videos_to_process (int): For the 'cars' dataset, specifies the maximum number of
+                                               collision videos to process from the training split.
+                                               Set to 0 or negative to process all available collision videos.
+                                               Ignored for 'drones' dataset.
+        num_no_collision_videos_to_process (int): For the 'cars' dataset, specifies the maximum number of
+                                                  no-collision videos to process from the training split.
+                                                  Set to 0 or negative to process all available no-collision videos.
+                                                  Ignored for 'drones' dataset.
                       
     Returns:
         tuple[str, str, list[str]]: 
@@ -706,125 +727,251 @@ def create_labeled_sequences_from_annotations(video_dir: str, annotation_dir: st
     test_output_dir = os.path.join(output_dir, 'test')
     class_names = ['no_collision', 'collision']
 
-    # --- Prepare output directory structure ---
-    # Delete existing directories to ensure a clean slate for the new split logic
+    # --- Check for existing sequences to avoid re-processing ---
+    # Check if the expected HDF5 directories exist and contain at least some files
+    all_target_dirs = [os.path.join(train_output_dir, '0'), os.path.join(train_output_dir, '1'),
+                       os.path.join(test_output_dir, '0'), os.path.join(test_output_dir, '1')]
+    
+    all_dirs_exist_and_not_empty = True
+    for d in all_target_dirs:
+        if not os.path.exists(d) or not any(f.endswith('.hdf5') for f in os.listdir(d)):
+            all_dirs_exist_and_not_empty = False
+            break
+
+    if all_dirs_exist_and_not_empty:
+        print(f"Detected existing HDF5 sequences in '{output_dir}'. Skipping sequence generation.")
+        # Return existing directories if generation is skipped
+        return train_output_dir, test_output_dir, class_names
+
+    # If directories are not complete, proceed to clear and recreate
+    print(f"HDF5 sequences not fully found or incomplete in '{output_dir}'. Clearing and regenerating.")
     if os.path.exists(output_dir):
-        print(f"Clearing existing output directory: {output_dir}")
         shutil.rmtree(output_dir)
     
-    os.makedirs(os.path.join(train_output_dir, '0'), exist_ok=True) # train/no_collision
-    os.makedirs(os.path.join(train_output_dir, '1'), exist_ok=True) # train/collision
-    os.makedirs(os.path.join(test_output_dir, '0'), exist_ok=True)  # test/no_collision
-    os.makedirs(os.path.join(test_output_dir, '1'), exist_ok=True)   # test/collision
+    os.makedirs(os.path.join(train_output_dir, '0'), exist_ok=True)
+    os.makedirs(os.path.join(train_output_dir, '1'), exist_ok=True)
+    os.makedirs(os.path.join(test_output_dir, '0'), exist_ok=True)
+    os.makedirs(os.path.join(test_output_dir, '1'), exist_ok=True)
     print(f"Created new output directory structure at {output_dir}")
 
-    # The keys in annotation_files_dict (e.g., '00001') are used to form video filenames
-    annotation_files_dict = {f.replace('.xlsx', '').split('-')[-1]: os.path.join(annotation_dir, f) 
-                             for f in os.listdir(annotation_dir) if f.endswith('.xlsx')}
+    all_videos_info = [] # Will store structured info for videos to be processed
 
-    # Collect all sequences and their metadata (original video ID, sequence index, label)
-    # We collect metadata to reconstruct the desired filename later.
-    all_sequences_metadata = [] 
+    if dataset_type == "drones":
+        drones_video_dir = os.path.join(base_dataset_dir, 'videos')
+        drones_annotation_dir = os.path.join(base_dataset_dir, 'dataframes')
+        
+        annotation_files_dict = {f.replace('.xlsx', '').split('-')[-1]: os.path.join(drones_annotation_dir, f) 
+                                 for f in os.listdir(drones_annotation_dir) if f.endswith('.xlsx')}
 
-    print("Extracting all sequences from videos...")
-    # Iterate through annotation file keys, as they contain the video IDs with correct padding
-    for video_id_from_annotation_key in tqdm(sorted(annotation_files_dict.keys()), desc="Extracting Sequences from Videos"):
-        # Convert the video_id from annotation key (e.g., '00001') to an integer,
-        # then format it back to a two-digit string (e.g., '01').
-        video_id_for_filename = str(int(video_id_from_annotation_key)).zfill(2)
-        video_file_name = f"collision{video_id_for_filename}.mp4" 
-        video_path = os.path.join(video_dir, video_file_name)
-        annotation_path = annotation_files_dict.get(video_id_from_annotation_key) # Use the original key for lookup
+        print(f"Collecting video and annotation info for 'drones' from: {drones_video_dir} and {drones_annotation_dir}")
+        for video_id_key in tqdm(sorted(annotation_files_dict.keys()), desc="Collecting Drone Video Info"):
+            video_id_for_filename = str(int(video_id_key)).zfill(2) # e.g., '01' from '00001'
+            video_file_name = f"collision{video_id_for_filename}.mp4" 
+            video_path = os.path.join(drones_video_dir, video_file_name)
+            annotation_path = annotation_files_dict.get(video_id_key)
 
-        if not os.path.exists(video_path) or not annotation_path:
-            print(f"Warning: Missing video ({video_path}) or annotation ({annotation_path}) for ID: {video_id_from_annotation_key}. Skipping.")
-            continue
+            if not os.path.exists(video_path) or not annotation_path:
+                print(f"Warning: Missing video ({video_path}) or annotation ({annotation_path}) for ID: {video_id_key}. Skipping.")
+                continue
+
+            try:
+                df_anno = pd.read_excel(annotation_path)
+                frame_collision_labels = {}
+                for _, row in df_anno.iterrows():
+                    try:
+                        filename_in_excel = str(row['file']) # e.g., 'video-00001-frame-00001'
+                        frame_number = int(filename_in_excel.split('-frame-')[1].split('.')[0])
+                        collision_label = int(row['collision'])
+                        frame_collision_labels[frame_number] = collision_label
+                    except (IndexError, ValueError):
+                        print(f"Warning: Could not parse frame or label from '{row.get('file', 'N/A')}' in {annotation_path}. Skipping row.")
+                
+                video_id_for_hdf5_name = video_id_key 
+                all_videos_info.append({
+                    'video_path': video_path,
+                    'video_id_for_hdf5_name': video_id_for_hdf5_name,
+                    'annotations': frame_collision_labels, # Dict: {frame_number: label}
+                    'frame_rate': None # Not directly used for labeling logic in drones for sequence generation
+                })
+            except Exception as e:
+                print(f"Error processing drone video {video_id_key}: {e}. Skipping.")
+
+    elif dataset_type == "cars":
+        cars_videos_source_dir_train = os.path.join(base_dataset_dir, 'videos') # Base directory (e.g., ./cars/videos)
+        cars_csv_path = os.path.join(base_dataset_dir, 'data_labels.csv') # Assuming data_labels.csv
+
+        if not os.path.exists(cars_videos_source_dir_train):
+            print(f"Error: Car videos source directory not found at '{cars_videos_source_dir_train}'. Exiting.")
+            return train_output_dir, test_output_dir, class_names
+        if not os.path.exists(cars_csv_path):
+            print(f"Error: Car annotation CSV not found at '{cars_csv_path}'. Exiting.")
+            return train_output_dir, test_output_dir, class_names
 
         try:
-            df = pd.read_excel(annotation_path)
-            frame_collision_labels = {}
-            for _, row in df.iterrows():
-                try:
-                    filename = str(row['file'])
-                    frame_number = int(filename.split('-frame-')[1].split('.')[0])
-                    collision_label = int(row['collision'])
-                    frame_collision_labels[frame_number] = collision_label
-                except (IndexError, ValueError):
-                    print(f"Warning: Could not parse frame or label from '{row.get('file', 'N/A')}' in {annotation_path}. Skipping row.")
+            annotations_df_cars = pd.read_csv(cars_csv_path)
+            annotations_df_cars['id'] = annotations_df_cars['id'].astype(int) 
+            annotations_df_cars['time_of_alert'] = pd.to_numeric(annotations_df_cars['time_of_alert'], errors='coerce')
+            annotations_df_cars['time_of_event'] = pd.to_numeric(annotations_df_cars['time_of_event'], errors='coerce')
         except Exception as e:
-            print(f"Error reading annotation file for {video_id_from_annotation_key}: {e}. Skipping video.")
-            continue
+            print(f"Error reading car annotation CSV '{cars_csv_path}': {e}. Exiting.")
+            return train_output_dir, test_output_dir, class_names
+
+        collision_video_ids = annotations_df_cars[annotations_df_cars['target'] == 1]['id'].tolist()
+        no_collision_video_ids = annotations_df_cars[annotations_df_cars['target'] == 0]['id'].tolist()
+
+        np.random.seed(42) # For reproducible selection of car videos
+        np.random.shuffle(collision_video_ids)
+        np.random.shuffle(no_collision_video_ids)
+
+        selected_collision_ids = collision_video_ids[:num_collision_videos_to_process] if num_collision_videos_to_process > 0 else collision_video_ids
+        selected_no_collision_ids = no_collision_video_ids[:num_no_collision_videos_to_process] if num_no_collision_videos_to_process > 0 else no_collision_video_ids
+
+        all_selected_videos_to_process = selected_collision_ids + selected_no_collision_ids
+        np.random.shuffle(all_selected_videos_to_process) 
+
+        print(f"Processing {len(selected_collision_ids)} collision videos and "
+              f"{len(selected_no_collision_ids)} no-collision videos from '{cars_videos_source_dir_train}' for sequence generation...")
+
+        if not all_selected_videos_to_process:
+            print("No videos selected for processing from the 'cars' dataset. Exiting.")
+            return train_output_dir, test_output_dir, class_names
+
+        print(f"Collecting video details for 'cars' from: {cars_videos_source_dir_train}")
+        for video_id in tqdm(all_selected_videos_to_process, desc="Collecting Car Video Info"):
+            video_filename = f"{video_id:05d}.mp4" 
+            video_path = os.path.join(cars_videos_source_dir_train, video_filename)
+            
+            if not os.path.exists(video_path):
+                print(f"Warning: Video file not found for ID {video_id} at {video_path}. Skipping.")
+                continue
+
+            video_annotation_row = annotations_df_cars[annotations_df_cars['id'] == video_id].iloc[0]
+            
+            video_id_for_hdf5_name = str(video_id).zfill(5)
+
+            temp_cap = cv2.VideoCapture(video_path)
+            temp_frame_rate = temp_cap.get(cv2.CAP_PROP_FPS)
+            temp_cap.release() 
+            
+            if temp_frame_rate <= 0:
+                print(f"Warning: Invalid frame rate for {video_path}. Skipping.")
+                continue
+
+            all_videos_info.append({
+                'video_path': video_path,
+                'video_id_for_hdf5_name': video_id_for_hdf5_name,
+                'annotations': video_annotation_row, # Pandas Series with time_of_event, time_of_alert, target
+                'frame_rate': temp_frame_rate
+            })
+    else:
+        raise ValueError(f"Unknown dataset_type: {dataset_type}. Choose 'drones' or 'cars'.")
+
+    if not all_videos_info:
+        print("No valid videos found or selected for processing for any dataset type. Exiting.")
+        return train_output_dir, test_output_dir, class_names
+    
+    # --- Main loop for sequence extraction (Unified Logic) ---
+    all_sequences_metadata = []
+    print("Extracting sequences from selected videos...")
+    for video_info in tqdm(all_videos_info, desc="Extracting Sequences"):
+        video_path = video_info['video_path']
+        video_id_for_hdf5_name = video_info['video_id_for_hdf5_name']
+        annotations = video_info['annotations'] 
+        frame_rate = video_info['frame_rate'] 
 
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             print(f"Error opening video file: {video_path}. Skipping.")
             continue
 
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        total_frames_in_video = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
-        sequence_index_in_video = 0 # To generate sequential numbers for HDF5 filenames
+        # --- Determine the frame limit for extraction based on dataset type ---
+        max_frame_to_process = total_frames_in_video
+        if dataset_type == "cars":
+            video_overall_target = annotations.get('target', 0)
+            time_of_event = annotations.get('time_of_event')
+            
+            # If it's a collision video and time_of_event is valid, limit frame processing
+            if video_overall_target == 1 and pd.notna(time_of_event) and time_of_event >= 0:
+                # Calculate the frame index corresponding to time_of_event
+                # Sequences should not start if their end would go past time_of_event
+                # Or, more simply, stop iterating through frames once time_of_event is reached.
+                # `math.floor(time_of_event * frame_rate)` gives the 0-based index of the frame AT the event time.
+                # +1 to include that frame.
+                frame_idx_at_event = math.floor(time_of_event * frame_rate) + 1
+                # We need to ensure that the *start_frame_idx* for a sequence, plus its length,
+                # does not exceed this `frame_idx_at_event`.
+                # So, sequences can only start up to `frame_idx_at_event - sequence_length`.
+                max_frame_to_process = min(total_frames_in_video, frame_idx_at_event)
+                # Ensure it's at least 1, otherwise range might become negative and fail.
+                max_frame_to_process = max(0, max_frame_to_process) 
+                
+        sequence_index_in_video = 0 
 
-        for start_frame_idx in range(0, total_frames - sequence_length + 1, stride):
+        # The loop now runs up to max_frame_to_process, considering the sequence length.
+        for start_frame_idx in range(0, max_frame_to_process - sequence_length + 1, stride):
             frames_in_sequence = []
-            cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame_idx) # Set video capture position
+            cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame_idx) 
             
             for _ in range(sequence_length):
-                ret, frame = cap.read() # frame is read as BGR by OpenCV
+                ret, frame = cap.read() 
                 if not ret:
                     break
                 frame_resized = cv2.resize(frame, target_size)
-                # Store frames in BGR format and uint8 (CRITICAL for ResNet/VGG preprocess_input)
                 frames_in_sequence.append(frame_resized.astype(np.uint8)) 
             
             if len(frames_in_sequence) == sequence_length:
                 is_collision_in_sequence = False
-                for frame_offset in range(sequence_length):
-                    current_frame_number_in_video = start_frame_idx + frame_offset + 1 # 1-based index
-                    if current_frame_number_in_video in frame_collision_labels and frame_collision_labels[current_frame_number_in_video] == 1:
-                        is_collision_in_sequence = True
-                        break
                 
-                # --- CRITICAL CHANGE HERE: Handle single frame data saving ---
-                # If sequence_length is 1, save as (H, W, C) directly for ImageDataGenerator.
-                # Otherwise, save as (seq_len, H, W, C) for multi-frame.
-                data_to_save = np.array(frames_in_sequence) # This is (seq_len, H, W, C)
+                # --- Dataset-specific labeling logic for sequence ---
+                if dataset_type == "drones":
+                    frame_collision_labels = annotations # This is the dict {frame_number: label}
+                    for frame_offset in range(sequence_length):
+                        current_frame_number_in_video = start_frame_idx + frame_offset + 1 # 1-based index
+                        if current_frame_number_in_video in frame_collision_labels and frame_collision_labels[current_frame_number_in_video] == 1:
+                            is_collision_in_sequence = True
+                            break
+                elif dataset_type == "cars":
+                    video_overall_target = annotations.get('target', 0)
+                    time_of_alert = annotations.get('time_of_alert')
+                    time_of_event = annotations.get('time_of_event')
 
-                if sequence_length == 1:
-                    # Remove the sequence dimension if it's 1 for ImageDataGenerator compatibility
-                    # E.g., (1, 224, 224, 3) becomes (224, 224, 3)
-                    if data_to_save.ndim == 4 and data_to_save.shape[0] == 1:
-                        data_to_save = data_to_save[0] # Take the single frame out of the sequence dimension
-                    elif data_to_save.ndim != 3: # If not (1,H,W,C) nor (H,W,C) after processing 1 frame
-                        print(f"Warning: Single-frame data for {video_id_from_annotation_key}-seq-{sequence_index_in_video} has unexpected shape {data_to_save.shape} for seq_len=1. Expected (1,H,W,C) or (H,W,C). Saving as is.")
-                # --- END CRITICAL CHANGE ---
+                    if video_overall_target == 1: # Only check collision interval if video is labeled as positive
+                        for frame_offset in range(sequence_length):
+                            current_frame_time = (start_frame_idx + frame_offset) / frame_rate # 0-based frame_idx to time
+                            
+                            # A sequence is labeled '1' if any frame within it is between time_of_alert and time_of_event.
+                            if pd.notna(time_of_alert) and pd.notna(time_of_event) and \
+                               time_of_alert <= current_frame_time <= time_of_event:
+                                is_collision_in_sequence = True
+                                break
+                
+                data_to_save = np.array(frames_in_sequence) # Shape: (sequence_length, H, W, C) - always 5D here
 
-                # Store sequence data along with its determined label and original video ID/sequence index
                 all_sequences_metadata.append({
-                    'video_id': video_id_from_annotation_key, # Use the video_id_base directly for consistent naming
+                    'video_id': video_id_for_hdf5_name, 
                     'sequence_idx_in_video': sequence_index_in_video,
-                    'data': data_to_save, # Use the potentially adjusted data
+                    'data': data_to_save, 
                     'label': 1 if is_collision_in_sequence else 0
                 })
-                sequence_index_in_video += 1 # Increment sequence counter for unique naming
+                sequence_index_in_video += 1 
         
         cap.release()
 
     if not all_sequences_metadata:
         print("No sequences extracted from any video.")
-        return train_output_dir, test_output_dir, class_names # Return empty directories
+        return train_output_dir, test_output_dir, class_names
 
     # --- Perform SEQUENCE-LEVEL Train/Test Split ---
     print("\nPerforming sequence-level train/test split...")
-    # Extract data and labels for splitting
-    sequences_data = [item['data'] for item in all_sequences_metadata]
     sequences_labels = [item['label'] for item in all_sequences_metadata]
     
-    # Split indices to keep track of original metadata
     train_indices, test_indices, _, _ = train_test_split(
         range(len(all_sequences_metadata)), 
-        sequences_labels, # Stratify based on labels
+        sequences_labels, 
         test_size=(1 - train_test_split_ratio), 
-        stratify=sequences_labels, # Ensure stratified split
+        stratify=sequences_labels, 
         random_state=42
     )
 
@@ -834,21 +981,16 @@ def create_labeled_sequences_from_annotations(video_dir: str, annotation_dir: st
         for original_idx in tqdm(indices_list, desc=f"Saving {idx_type} sequences"):
             item = all_sequences_metadata[original_idx]
             
-            # Construct output path (e.g., output_dir/train/1/video-00002-seq-00005.hdf5)
             target_label_dir = os.path.join(output_dir, idx_type, str(item['label']))
             
-            # Generate filename: video-XXXXX-seq-YYYYY.hdf5
-            # YYYYY is the sequence's original index within its video
             filename = f"video-{item['video_id']}-seq-{str(item['sequence_idx_in_video']).zfill(5)}.hdf5"
             h5_path = os.path.join(target_label_dir, filename)
 
             try:
                 with h5py.File(h5_path, 'w') as hf:
-                    # Save 'sequences' dataset with the adjusted shape (H,W,C) or (seq_len, H,W,C)
-                    # No maxshape, compression is fine for the dataset itself
                     hf.create_dataset('sequences', data=item['data'],
                                       compression='gzip', compression_opts=4)
-                    hf.create_dataset('label', data=item['label']) # Corrected: no chunk/filter for scalar
+                    hf.create_dataset('label', data=item['label'])
             except Exception as e:
                 print(f"Error saving {h5_path}: {e}")
 

@@ -14,7 +14,8 @@ import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Input, Flatten, Dense, Dropout, TimeDistributed, LSTM, Reshape
 # Use tf.keras.optimizers.legacy.Adam if on M1/M2 Mac
-from tensorflow.keras.optimizers.legacy import Adam # Using legacy Adam for broader compatibility
+from tensorflow.keras.optimizers import Adam 
+# from tensorflow.keras.optimizers.legacy import Adam # Using legacy Adam for broader compatibility
 
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
@@ -60,6 +61,8 @@ model_configs = {
 }
 
 # --- USER CONFIGURATION ---
+DATASET_TYPE = 'cars' # 'drones' # 
+
 # Set this to 'single_frame' for a CNN model or 'multi_frame' for a CNN-LSTM model.
 MODEL_TYPE = 'multi_frame' # Options: 'single_frame', 'multi_frame'
 
@@ -75,7 +78,7 @@ LEARNING_RATE = 1e-5
 # STRIDE: Number of frames to advance between consecutive sequences.
 # These parameters directly influence the name of the HDF5 data directory.
 SEQUENCE_LENGTH = 3 # Example: 1 for single-frame, 3 or 5 for multi-frame
-STRIDE = 3          # Example: 1 for single-frame, 3 or 5 for multi-frame
+STRIDE = 1          # Example: 1 for single-frame, 3 or 5 for multi-frame
 
 # Model-specific parameters
 SF_PRETRAINED_MODEL = 'ResNet50' # Pretrained backbone for single-frame model
@@ -89,7 +92,8 @@ MF_N_HIDDEN_LSTM = 128 # Units in the LSTM layer
 # --- Data Directory Definition ---
 # Constructs the path to the HDF5 data based on configured SEQUENCE_LENGTH and STRIDE.
 # This directory must match the 'output_dir' used when generating data via create_labeled_sequences_from_annotations.
-DATA_DIR_FOR_LOADING = f'labeled_sequences_len_{SEQUENCE_LENGTH}_stride_{STRIDE}'
+DATA_DIR_FOR_LOADING = os.path.join(DATASET_TYPE, f'labeled_sequences_len_{SEQUENCE_LENGTH}_stride_{STRIDE}')
+
 
 
 # --- DYNAMIC PARAMETER SETUP BASED ON MODEL_TYPE ---
@@ -101,7 +105,7 @@ if MODEL_TYPE == 'single_frame':
     
     SELECTED_PRETRAINED_MODEL = SF_PRETRAINED_MODEL
     CURRENT_MODEL_OUTPUT_CONFIG = model_configs['binary_sigmoid'] # Single-frame uses sigmoid output
-    OUTPUT_DIR = 'models_singleframe_tfdata' # Output directory for saved models and plots
+    OUTPUT_DIR = os.path.join(DATASET_TYPE,'models_singleframe_tfdata') # Output directory for saved models and plots
     MODEL_NAME = f'CNN_Singleframe_{SELECTED_PRETRAINED_MODEL}_len_{SEQUENCE_LENGTH}_stride_{STRIDE}_TFData'
     SHOULD_DATASET_OUTPUT_4D = True # Dataset will output (H,W,C) for this model type
 
@@ -112,7 +116,7 @@ elif MODEL_TYPE == 'multi_frame':
     
     SELECTED_PRETRAINED_MODEL = MF_PRETRAINED_MODEL
     CURRENT_MODEL_OUTPUT_CONFIG = model_configs['multiclass_softmax'] # Multi-frame uses softmax output
-    OUTPUT_DIR = 'models_multiframe_tfdata' # Output directory for saved models and plots
+    OUTPUT_DIR = os.path.join(DATASET_TYPE,'models_multiframe_tfdata') # Output directory for saved models and plots
     MODEL_NAME = f'CNN_Multiframe_{SELECTED_PRETRAINED_MODEL}_len_{SEQUENCE_LENGTH}_stride_{STRIDE}_TFData'
     SHOULD_DATASET_OUTPUT_4D = False # Dataset will output (SeqLen,H,W,C) for this model type
 

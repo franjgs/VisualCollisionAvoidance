@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Mon May 19 15:53:29 2025
+Main script for training and evaluating collision avoidance Deep Neural Networks.
+Supports single-frame CNNs models.
 
+Created on Mon May 19 16:30:54 2025
 @author: fran
 """
 import os
@@ -25,8 +27,10 @@ from tensorflow.keras.applications.resnet import preprocess_input as resnet_prep
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Dense, Flatten, Dropout, GlobalAveragePooling2D
+# Use tf.keras.optimizers.legacy.Adam if on M1/M2 Mac
 from tensorflow.keras.optimizers import Adam
-# from tensorflow.keras.optimizers.legacy import Adam
+# from tensorflow.keras.optimizers.legacy import Adam # Using legacy Adam for broader compatibility
+
 from tensorflow.keras.optimizers.schedules import CosineDecay
 from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping
 
@@ -59,11 +63,11 @@ def log_memory():
     
 # --- Main Configuration Section ---
 # Choose which dataset to use: "drone" or "cars"
-DATASET_TO_USE = "drones" # "cars" # <--- IMPORTANT: Change this to "drones" or "cars" as needed
+DATASET_TO_USE = "cars" # "drones" #  <--- IMPORTANT: Change this to "drones" or "cars" as needed
 
 # --- Common Setup (applies to both datasets) ---
 MODEL_LIST = ["VGG16", "ResNet50", "EfficientNet", "MobileNetV2", "EfficientNetB0"]
-MODEL_LIST = ["VGG16"]
+# MODEL_LIST = ["VGG16"]
 
 output_base_dir_for_images = os.path.join(DATASET_TO_USE,f'image_data_{DATASET_TO_USE}')
 output_dir_for_models = os.path.join(DATASET_TO_USE,"models")
