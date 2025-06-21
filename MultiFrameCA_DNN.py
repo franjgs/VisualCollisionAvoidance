@@ -333,7 +333,7 @@ else:
 
 # Compile the model with the chosen optimizer, loss function, and metrics
 model.compile(
-    optimizer=Adam(learning_rate=LEARNING_RATE),
+    optimizer=Adam(learning_rate=LEARNING_RATE, clipnorm=1.0),
     loss=CURRENT_MODEL_OUTPUT_CONFIG["loss_function"],
     metrics=['accuracy']
 )
