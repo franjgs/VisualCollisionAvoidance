@@ -286,7 +286,7 @@ for MODEL_NAME in MODEL_LIST:
     # --- Initial Training ---
     if base_model is not None:
         base_model.trainable = False
-        model.compile(optimizer=Adam(learning_rate=1e-5), 
+        model.compile(optimizer=Adam(learning_rate=1e-5, clipnorm=1.0), 
                       loss=selected_config["loss_function"],
                       metrics=['accuracy'])
         steps_per_epoch = int(np.ceil(generator_train.n / batch_size))
