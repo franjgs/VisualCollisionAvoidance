@@ -429,12 +429,26 @@ example_errors(cls_true=cls_true,
 # --- Plot Training History ---
 fig = plot_training_history(history, model_name_results, None, save_path=os.path.join(OUTPUT_DIR,f"{model_name_results}.pdf"))
 plt.show()
-# --- Save the Model and Class Names ---
+
+# --- Save the Model and Training Metrics ---
 print(f"\nSaving {MODEL_TYPE} model...")
-model.save(os.path.join(OUTPUT_DIR, f'{model_name_results}.keras'))
-with open(os.path.join(OUTPUT_DIR, f'{model_name_results}_classes.pkl'), 'wb') as f:
-    pickle.dump(class_names, f)
-print(f"Model and class names saved to {OUTPUT_DIR}")
+model.save(os.path.join(OUTPUT_DIR, f'{model_name_results}.keras')) # Ensure output_dir_for_models is correct
+
+# Extract training metrics
+training_metrics = {
+    'accuracy': history.history['accuracy'],
+    'loss': history.history['loss'],
+    'val_accuracy': history.history['val_accuracy'],
+    'val_loss': history.history['val_loss']
+}
+
+# Save training metrics using pickle
+# Saving to the results directory, as it's data related to the run's performance
+metrics_save_path = os.path.join(OUTPUT_DIR, f'{model_name_results}_training_metrics.pkl')
+with open(metrics_save_path, 'wb') as f:
+    pickle.dump(training_metrics, f)
+print(f"Model saved to {os.path.join(OUTPUT_DIR, f'{model_name_results}.keras')}")
+print(f"Training metrics saved to {metrics_save_path}")
 
 # Close the TensorFlow session
 session.close()
