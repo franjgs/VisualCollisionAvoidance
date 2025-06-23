@@ -275,7 +275,7 @@ def plot_training_history(history, model_name=None, history_fine=None, save_path
         filename_without_ext = os.path.splitext(base_filename)[0]
         
         if model_name:
-            final_save_path = os.path.join(output_dir, f"{filename_without_ext}_{model_name}.pdf")
+            final_save_path = os.path.join(output_dir, f"{model_name}.pdf")
         else:
             final_save_path = os.path.join(output_dir, f"{filename_without_ext}.pdf")
         
