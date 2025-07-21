@@ -59,13 +59,13 @@ def log_memory():
 
 # --- Global Configuration Section ---
 # Set to True to train a new model, False to skip training
-TRAIN_MODEL = True
+TRAIN_MODEL = False
 # Set to True to run inference after training (or with a loaded model)
 RUN_INFERENCE = True
 
 # --- Primary Dataset Mode for Training (and default for Inference if TRAIN_MODEL is True) ---
 # Choose the dataset mode for training: "drones", "cars", or "mixed"
-GLOBAL_DATASET_MODE = "mixed" # "cars" #  "drones" #
+GLOBAL_DATASET_MODE = "drones"  # "cars" #  "mixed" #  "drones" #
 
 # --- Inference Specific Configuration (ONLY if TRAIN_MODEL is False) ---
 # If TRAIN_MODEL is False, this specifies the dataset to run inference on.
@@ -73,7 +73,7 @@ GLOBAL_DATASET_MODE = "mixed" # "cars" #  "drones" #
 # Set this to None if TRAIN_MODEL is True and you want inference on the same dataset as training.
 # Set this explicitly (e.g., "cars", "drones", "mixed") if TRAIN_MODEL is False
 # and you want to perform cross-dataset inference or just inference on a specific dataset.
-INFERENCE_DATASET_TYPE_OVERRIDE = None # Example: "cars" if you want to infer on cars data when not training
+INFERENCE_DATASET_TYPE_OVERRIDE =  "drones" # "cars"  # None # Example: "cars" if you want to infer on cars data when not training
 
 # If GLOBAL_DATASET_MODE is "drones" or "mixed"
 DRONES_TRAIN_RANGE_MIN = 2 
@@ -90,11 +90,11 @@ CARS_TRAIN_FRAMES_PER_SECOND = 15 # Sampling rate for car data during training
 # that is compatible with the selected GLOBAL_DATASET_MODE (if training) or
 # INFERENCE_DATASET_TYPE_OVERRIDE (if only inferring).
 MODEL_WEIGHTS_FOR_INFERENCE = "drones/models_singleframe/ResNet50_collision_avoidance_1710500000.keras" 
-
+MODEL_WEIGHTS_FOR_INFERENCE = "mixed_data/models_SF/ResNet50_collision_avoidance_1752927399.keras"
 
 # --- Common Model and Data Processing Parameters ---
-MODEL_LIST = ["ResNet50"] # Models to train/evaluate
-MODEL_LIST = ["VGG16"] # , "EfficientNet", "MobileNetV2", "EfficientNetB0"]
+MODEL_LIST = ["VGG16", "ResNet50", "EfficientNet", "MobileNetV2", "EfficientNetB0"] # Models to train/evaluate
+MODEL_LIST = ["EfficientNetB0"] # Models to train/evaluate
 
 TARGET_IMAGE_SIZE = (224, 224)
 TRAIN_VALIDATION_SPLIT_RATIO = 0.8
@@ -122,7 +122,7 @@ CARS_RAW_VIDEOS_DIR = os.path.join(CARS_BASE_DIR, 'videos') # Points to the fold
 
 # Dynamic output directories based on GLOBAL_DATASET_MODE (primarily for training outputs)
 if GLOBAL_DATASET_MODE == "drones":
-    OUTPUT_BASE_DIR_FOR_IMAGES = os.path.join(DRONES_BASE_DIR, 'image_data_drones')
+    OUTPUT_BASE_DIR_FOR_IMAGES = os.path.join(DRONES_BASE_DIR, 'images_SF_drones')
     OUTPUT_DIR_FOR_MODELS = os.path.join(DRONES_BASE_DIR, "models_SF")
     OUTPUT_DIR_FOR_RESULTS = os.path.join(DRONES_BASE_DIR, "results_SF")
 elif GLOBAL_DATASET_MODE == "cars":
@@ -130,7 +130,7 @@ elif GLOBAL_DATASET_MODE == "cars":
     OUTPUT_DIR_FOR_MODELS = os.path.join(CARS_BASE_DIR, "models_SF")
     OUTPUT_DIR_FOR_RESULTS = os.path.join(CARS_BASE_DIR, "results_SF")
 elif GLOBAL_DATASET_MODE == "mixed":
-    OUTPUT_BASE_DIR_FOR_IMAGES = "mixed_data/image_data_mixed"
+    OUTPUT_BASE_DIR_FOR_IMAGES = "mixed_data/images_SF_mixed"
     OUTPUT_DIR_FOR_MODELS = "mixed_data/models_SF"
     OUTPUT_DIR_FOR_RESULTS = "mixed_data/results_SF"
 else:
@@ -412,11 +412,11 @@ def run_inference(model_path, inference_dataset_type, output_dir_for_results,
     # Determine the correct directory for inference data based on type
     inference_data_root_dir = ""
     if inference_dataset_type == "drones":
-        inference_data_root_dir = os.path.join(base_dir_drones, 'image_data_drones')
+        inference_data_root_dir = os.path.join(base_dir_drones, 'images_SF_drones')
     elif inference_dataset_type == "cars":
         inference_data_root_dir = os.path.join(base_dir_cars, 'images_SF_cars')
     elif inference_dataset_type == "mixed":
-        inference_data_root_dir = "mixed_data/image_data_mixed"
+        inference_data_root_dir = "mixed_data/images_SF_mixed"
     else:
         print(f"Error: Unknown inference dataset type: {inference_dataset_type}. Skipping inference.")
         return
@@ -480,7 +480,7 @@ def run_inference(model_path, inference_dataset_type, output_dir_for_results,
 
 
 # --- Main Execution ---
-
+    
 # Determine the actual dataset type for inference
 actual_inference_dataset_type = GLOBAL_DATASET_MODE
 if not TRAIN_MODEL and INFERENCE_DATASET_TYPE_OVERRIDE is not None:
